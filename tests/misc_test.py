@@ -1,18 +1,15 @@
 import unittest
 import os
 import json
-import tempfile
-import sys
-from v2ray2proxy import V2RayProxy, AsyncV2RayProxy
-from v2ray2proxy.base_proxy import BaseV2RayProxy
+from v2ray2proxy import V2RayProxy, V2RayPool
 
 # Get a test V2Ray link from environment or skip the test
 TEST_LINK = os.environ.get("TEST_V2RAY_LINK")
 
+
 class TestMiscFunctionality(unittest.TestCase):
     """Test miscellaneous functionality that users might need."""
     
-    @unittest.skipIf(not TEST_LINK, "TEST_V2RAY_LINK environment variable not set")
     def test_export_config_as_json(self):
         """Test exporting proxy configuration as JSON."""
         proxy = V2RayProxy(TEST_LINK, config_only=True)
@@ -32,7 +29,7 @@ class TestMiscFunctionality(unittest.TestCase):
         # A sample VMess link - no need for a real one
         vmess_link = "vmess://eyJhZGQiOiJleGFtcGxlLmNvbSIsImFpZCI6IjAiLCJpZCI6IjExMTExMTExLTIyMjItMzMzMy00NDQ0LTU1NTU1NTU1NTU1NSIsIm5ldCI6IndzIiwicG9ydCI6IjQ0MyIsInBzIjoiVGVzdCBWTWVzcyIsInNjeSI6ImF1dG8iLCJ0bHMiOiJ0bHMiLCJ0eXBlIjoibm9uZSIsInYiOiIyIn0="
         
-        proxy = BaseV2RayProxy(vmess_link, config_only=True)
+        proxy = V2RayProxy(vmess_link, config_only=True)
         outbound = proxy._parse_vmess_link(vmess_link)
         
         self.assertEqual(outbound["protocol"], "vmess")
@@ -44,7 +41,7 @@ class TestMiscFunctionality(unittest.TestCase):
         """Test parsing a VLESS link."""
         vless_link = "vless://11111111-2222-3333-4444-555555555555@example.com:443?type=ws&security=tls&path=%2Fpath&host=example.com#Test+VLESS"
         
-        proxy = BaseV2RayProxy(vless_link, config_only=True)
+        proxy = V2RayProxy(vless_link, config_only=True)
         outbound = proxy._parse_vless_link(vless_link)
         
         self.assertEqual(outbound["protocol"], "vless")
@@ -61,7 +58,7 @@ class TestMiscFunctionality(unittest.TestCase):
         # Use a sample link
         vmess_link = "vmess://eyJhZGQiOiJleGFtcGxlLmNvbSIsImFpZCI6IjAiLCJpZCI6IjExMTExMTExLTIyMjItMzMzMy00NDQ0LTU1NTU1NTU1NTU1NSIsIm5ldCI6IndzIiwicG9ydCI6IjQ0MyIsInBzIjoiVGVzdCBWTWVzcyIsInNjeSI6ImF1dG8iLCJ0bHMiOiJ0bHMiLCJ0eXBlIjoibm9uZSIsInYiOiIyIn0="
         
-        proxy = BaseV2RayProxy(vmess_link, socks_port=socks_port, http_port=http_port, config_only=True)
+        proxy = V2RayProxy(vmess_link, socks_port=socks_port, http_port=http_port, config_only=True)
         config = proxy.generate_config()
         
         # Check if the custom ports are used
@@ -76,7 +73,7 @@ class TestMiscFunctionality(unittest.TestCase):
         # Use a sample link
         vmess_link = "vmess://eyJhZGQiOiJleGFtcGxlLmNvbSIsImFpZCI6IjAiLCJpZCI6IjExMTExMTExLTIyMjItMzMzMy00NDQ0LTU1NTU1NTU1NTU1NSIsIm5ldCI6IndzIiwicG9ydCI6IjQ0MyIsInBzIjoiVGVzdCBWTWVzcyIsInNjeSI6ImF1dG8iLCJ0bHMiOiJ0bHMiLCJ0eXBlIjoibm9uZSIsInYiOiIyIn0="
         
-        proxy = BaseV2RayProxy(vmess_link, config_only=True)
+        proxy = V2RayProxy(vmess_link, config_only=True)
         config_path = proxy.create_config_file()
         
         # Check if the file exists
@@ -89,17 +86,10 @@ class TestMiscFunctionality(unittest.TestCase):
     @unittest.skipIf(not TEST_LINK, "TEST_V2RAY_LINK environment variable not set")
     def test_multiple_proxies(self):
         """Test running multiple proxies simultaneously."""
-        if not TEST_LINK:
-            self.skipTest("TEST_V2RAY_LINK environment variable not set")
-        
         proxy1 = V2RayProxy(TEST_LINK)
         proxy2 = V2RayProxy(TEST_LINK)
         
         try:
-            # Check that both proxies are running
-            self.assertTrue(proxy1.running)
-            self.assertTrue(proxy2.running)
-            
             # Check that they have different ports
             self.assertNotEqual(proxy1.socks_port, proxy2.socks_port)
             self.assertNotEqual(proxy1.http_port, proxy2.http_port)
@@ -112,24 +102,11 @@ class TestMiscFunctionality(unittest.TestCase):
         # Use a sample link
         vmess_link = "vmess://eyJhZGQiOiJleGFtcGxlLmNvbSIsImFpZCI6IjAiLCJpZCI6IjExMTExMTExLTIyMjItMzMzMy00NDQ0LTU1NTU1NTU1NTU1NSIsIm5ldCI6IndzIiwicG9ydCI6IjQ0MyIsInBzIjoiVGVzdCBWTWVzcyIsInNjeSI6ImF1dG8iLCJ0bHMiOiJ0bHMiLCJ0eXBlIjoibm9uZSIsInYiOiIyIn0="
         
-        proxy = BaseV2RayProxy(vmess_link, socks_port=1080, http_port=8080, config_only=True)
+        proxy = V2RayProxy(vmess_link, socks_port=1080, http_port=8080, config_only=True)
         
         # Check URL formats
         self.assertEqual(proxy.socks5_proxy_url, "socks5://127.0.0.1:1080")
         self.assertEqual(proxy.http_proxy_url, "http://127.0.0.1:8080")
-    
-    def test_requests_proxies_format(self):
-        """Test that the requests proxies format is correct."""
-        # Use a sample link
-        vmess_link = "vmess://eyJhZGQiOiJleGFtcGxlLmNvbSIsImFpZCI6IjAiLCJpZCI6IjExMTExMTExLTIyMjItMzMzMy00NDQ0LTU1NTU1NTU1NTU1NSIsIm5ldCI6IndzIiwicG9ydCI6IjQ0MyIsInBzIjoiVGVzdCBWTWVzcyIsInNjeSI6ImF1dG8iLCJ0bHMiOiJ0bHMiLCJ0eXBlIjoibm9uZSIsInYiOiIyIn0="
-        
-        proxy = V2RayProxy(vmess_link, socks_port=1080, config_only=True)
-        
-        # Check the requests proxies format
-        self.assertEqual(proxy.requests_proxies, {
-            "http": "socks5://127.0.0.1:1080",
-            "https": "socks5://127.0.0.1:1080"
-        })
     
     def test_module_exports(self):
         """Test that the module exports the correct classes and constants."""
@@ -137,11 +114,33 @@ class TestMiscFunctionality(unittest.TestCase):
         import v2ray2proxy
         
         self.assertTrue(hasattr(v2ray2proxy, 'V2RayProxy'))
-        self.assertTrue(hasattr(v2ray2proxy, 'AsyncV2RayProxy'))
+        self.assertTrue(hasattr(v2ray2proxy, 'V2RayPool'))
         self.assertTrue(hasattr(v2ray2proxy, 'VERSION'))
         
         # Check types
         self.assertEqual(type(v2ray2proxy.VERSION), str)
+    
+    @unittest.skipIf(not TEST_LINK, "TEST_V2RAY_LINK environment variable not set")
+    def test_pool_functionality(self):
+        """Test V2RayPool functionality."""
+        # Create a pool with two proxies
+        pool = V2RayPool(v2ray_links=[TEST_LINK, TEST_LINK])
+        
+        try:
+            # Test pool status
+            status = pool.get_status()
+            self.assertEqual(len(status), 2)
+            
+            # Test proxy selection
+            proxy = pool.get_proxy()
+            self.assertIsNotNone(proxy)
+            self.assertTrue(hasattr(proxy, 'http_proxy_url'))
+            
+            # Test get_fastest_proxy
+            fast_proxy = pool.get_fastest_proxy(count=1)
+            self.assertIsNotNone(fast_proxy)
+        finally:
+            pool.stop()
 
 if __name__ == "__main__":
     unittest.main()

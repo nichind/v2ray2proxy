@@ -1,9 +1,8 @@
 """
 v2ray2proxy - Convert V2Ray configs to usable proxies for HTTP clients
 """
-from .sync_proxy import V2RayProxy
-from .async_proxy import AsyncV2RayProxy
+from .base import V2RayCore, V2RayProxy, V2RayPool
 
-VERSION = "0.1"
+VERSION = "0.2"
 
-__all__ = ["V2RayProxy", "AsyncV2RayProxy", "VERSION"]
+__all__ = ["V2RayCore", "V2RayProxy", "V2RayPool", "VERSION"]

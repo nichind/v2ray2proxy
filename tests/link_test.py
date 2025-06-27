@@ -4,7 +4,6 @@ import json
 from v2ray2proxy import V2RayProxy
 
 class TestLinkParsing(unittest.TestCase):
-    
     def test_vmess_parsing(self):
         # A sample VMess link
         vmess_link = "vmess://eyJhZGQiOiJleGFtcGxlLmNvbSIsImFpZCI6IjAiLCJpZCI6IjExMTExMTExLTIyMjItMzMzMy00NDQ0LTU1NTU1NTU1NTU1NSIsIm5ldCI6IndzIiwicG9ydCI6IjQ0MyIsInBzIjoiVGVzdCBWTWVzcyIsInNjeSI6ImF1dG8iLCJ0bHMiOiJ0bHMiLCJ0eXBlIjoibm9uZSIsInYiOiIyIn0="
