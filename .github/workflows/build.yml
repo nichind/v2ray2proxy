@@ -24,6 +24,9 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install -r requirements-dev.txt
           python -m pip install -e .
+      - name: Set V2Ray link
+        run: |
+          echo "TEST_V2RAY_LINK=${{ secrets.TEST_V2RAY_LINK }}" >> $GITHUB_ENV
       - name: Run Tests
         run: |
           python -m pytest tests/ --tb=short --disable-warnings
