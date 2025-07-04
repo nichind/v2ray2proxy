@@ -14,9 +14,14 @@ import socket
 class V2RayCore:
     """Represents executable of V2Ray core."""
     def __init__(self):
-        self.release_tag_url = "https://github.com/v2fly/v2ray-core/releases/download/v4.31.0"
-        self.executable_dir = self._download_executables()
-        self.executable = os.path.join(self.executable_dir, "v2ray.exe" if os.name == 'nt' else "v2ray")
+        self.release_tag_url = os.environ.get("V2RAY_RELASE_TAG_URL") or "https://github.com/v2fly/v2ray-core/releases/download/v4.31.0"
+        if os.environ.get("V2RAY_EXECUTABLE_DIR"):
+            self.executable_dir = os.environ["V2RAY_EXECUTABLE_DIR"]
+            self.executable = os.path.join(self.executable_dir, "v2ray.exe" if os.name == 'nt' else "v2ray")
+        if not os.environ.get("V2RAY_EXECUTABLE_DIR") or not os.path.isdir(self.executable_dir):
+            logging.info("V2Ray executable directory not found in environment variable, using default...")
+            self.executable_dir = self._download_executables()
+            self.executable = os.path.join(self.executable_dir, "v2ray.exe" if os.name == 'nt' else "v2ray")  
         if not os.path.isfile(self.executable):
             raise RuntimeError(f"V2Ray executable not found at {self.executable}")
         logging.info(f"V2Ray executable found at {self.executable}")
@@ -192,8 +197,8 @@ class V2RayProxy:
             return s.connect_ex(('localhost', port)) == 0
 
     def _pick_unused_port(self, exclude_port: int = None) -> int:
-        for _ in range(1000):
-            port = random.randint(10000, 60000)
+        for _ in range(500):
+            port = random.randint(10000, 65535)
             if not self._is_port_in_use(port) and port != exclude_port:
                 return port
         raise RuntimeError("Could not find an unused port")

@@ -192,6 +192,11 @@ config_path = proxy.create_config_file()
 print(f"Config file created at: {config_path}")
 ```
 
+## Some thoughts
+
+Each v2ray instance eats about ~17MB of RAM on Linux
+About 40k avaliable ports (/2 for socks)
+
 ## License
 
 MIT
