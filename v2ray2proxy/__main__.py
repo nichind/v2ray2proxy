@@ -7,10 +7,8 @@ import logging
 from .base import V2RayProxy, V2RayPool
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
 
 def main():
     parser = argparse.ArgumentParser(description="Start a V2Ray proxy from a configuration link")
@@ -22,9 +20,9 @@ def main():
     parser.add_argument("--timeout", type=int, default=10, help="Timeout for test requests in seconds")
     parser.add_argument("--pool", action="store_true", help="Start a proxy pool with the provided link")
     parser.add_argument("--pool-size", type=int, default=1, help="Number of proxies in the pool (when using --pool)")
-    
+
     args = parser.parse_args()
-    
+
     try:
         if args.pool:
             pool_main(args)
@@ -36,21 +34,18 @@ def main():
         print(f"Error: {str(e)}")
         sys.exit(1)
 
+
 def proxy_main(args):
     try:
-        proxy = V2RayProxy(
-            args.link,
-            http_port=args.http_port,
-            socks_port=args.socks_port
-        )
-        
+        proxy = V2RayProxy(args.link, http_port=args.http_port, socks_port=args.socks_port)
+
         print(f"V2Ray proxy started:")
         print(f"  SOCKS5 proxy: {proxy.socks5_proxy_url}")
         print(f"  HTTP proxy: {proxy.http_proxy_url}")
-        
+
         if args.test:
             test_proxy(proxy, args.test_url, args.timeout)
-        
+
         if not args.test:
             try:
                 print("\nPress Ctrl+C to stop the proxy...")
@@ -62,18 +57,15 @@ def proxy_main(args):
         logging.error(f"Error starting proxy: {str(e)}")
         raise
 
+
 def pool_main(args):
     try:
         # Create a pool with the link repeated pool_size times
         links = [args.link] * args.pool_size
-        pool = V2RayPool(
-            v2ray_links=links,
-            http_port=args.http_port,
-            socks_port=args.socks_port
-        )
-        
+        pool = V2RayPool(v2ray_links=links, http_port=args.http_port, socks_port=args.socks_port)
+
         print(f"V2Ray proxy pool started with {args.pool_size} proxies:")
-        
+
         # Display status of all proxies in the pool
         status = pool.get_status()
         for proxy_id, proxy_status in status.items():
@@ -81,14 +73,14 @@ def pool_main(args):
             print(f"    Active: {proxy_status['active']}")
             print(f"    HTTP proxy: {proxy_status['http_proxy_url']}")
             print(f"    SOCKS5 proxy: {proxy_status['socks5_proxy_url']}")
-        
+
         if args.test:
             # Test the fastest proxy in the pool
             print("\nTesting the fastest proxy in the pool...")
             proxy = pool.get_fastest_proxy()
             if proxy:
                 test_proxy(proxy, args.test_url, args.timeout)
-        
+
         if not args.test:
             try:
                 print("\nPress Ctrl+C to stop the proxy pool...")
@@ -100,19 +92,17 @@ def pool_main(args):
         logging.error(f"Error starting proxy pool: {str(e)}")
         raise
 
+
 def test_proxy(proxy, test_url, timeout):
     import requests
-    
+
     print(f"\nTesting proxy with {test_url}...")
-    
+
     try:
-        proxies = {
-            "http": proxy.http_proxy_url,
-            "https": proxy.http_proxy_url
-        }
-        
+        proxies = {"http": proxy.http_proxy_url, "https": proxy.http_proxy_url}
+
         response = requests.get(test_url, proxies=proxies, timeout=timeout)
-        
+
         if response.status_code == 200:
             print(f"✅ Proxy test successful!")
             try:
@@ -124,6 +114,7 @@ def test_proxy(proxy, test_url, timeout):
             print(f"❌ Proxy test failed with status code: {response.status_code}")
     except Exception as e:
         print(f"❌ Proxy test failed: {str(e)}")
+
 
 if __name__ == "__main__":
     main()
