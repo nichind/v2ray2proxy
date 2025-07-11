@@ -1083,6 +1083,63 @@ class V2RayPool:
             return proxy.socks5_proxy_url
         return None
 
+    def get_fastest_proxy(self, count=None, timeout=5):
+        """
+        Get the fastest proxy from the pool by measuring latencies.
+
+        Args:
+            count (int, optional): Number of proxies to test. If None, test all active proxies.
+            timeout (int): Timeout in seconds for latency measurement.
+
+        Returns:
+            V2RayProxy: The fastest proxy, or None if no proxies are available or all fail.
+        """
+        if not self.active_proxies:
+            return None
+
+        # Determine which proxies to test
+        active_ids = list(self.active_proxies)
+        
+        if count is not None and count > 0:
+            # Test only a subset of proxies (randomly selected)
+            test_count = min(count, len(active_ids))
+            test_ids = random.sample(active_ids, test_count)
+        else:
+            # Test all active proxies
+            test_ids = active_ids
+
+        # Measure latencies for selected proxies
+        latencies = {}
+        for proxy_id in test_ids:
+            proxy = self.proxies[proxy_id]
+            proxies = {"http": proxy.http_proxy_url, "https": proxy.http_proxy_url}
+
+            try:
+                import requests
+                start_time = time.time()
+                response = requests.get("https://www.google.com", proxies=proxies, timeout=timeout)
+                end_time = time.time()
+
+                if response.status_code == 200:
+                    latency = end_time - start_time
+                    latencies[proxy_id] = latency
+                    # Update proxy's last known latency
+                    proxy.last_latency = latency
+                    proxy.last_check_time = end_time
+            except Exception as e:
+                logging.warning(f"Failed to measure latency for proxy {proxy_id}: {str(e)}")
+                # Mark as failed for monitoring purposes
+                proxy.last_error = str(e)
+                proxy.last_error_time = time.time()
+
+        # Return the fastest proxy
+        if latencies:
+            fastest_id = min(latencies, key=latencies.get)
+            logging.info(f"Fastest proxy is {fastest_id} with latency {latencies[fastest_id]:.3f}s")
+            return self.proxies[fastest_id]
+        
+        return None
+
     def stop(self):
         """Stop all proxies and clean up resources."""
         self.stop_all()
