@@ -8,3 +8,7 @@ dist/
 build/
 *.egg-info/
 *instructions*
+.log
+logs/
+results/
+uploads/

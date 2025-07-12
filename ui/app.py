@@ -15,11 +15,12 @@ import sys
 
 # Add parent directory to path to import v2ray2proxy
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from v2ray2proxy.base import V2RayProxy
+from v2ray2proxy.base import V2RayProxy, V2RayCore
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "v2ray-proxy-tester-secret-key"
 socketio = SocketIO(app, cors_allowed_origins="*")
+core = V2RayCore()
 
 # Global variables for tracking test state
 test_sessions = {}
