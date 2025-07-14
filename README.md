@@ -194,8 +194,7 @@ print(f"Config file created at: {config_path}")
 
 ## Some thoughts
 
-Each v2ray instance eats about ~17MB of RAM on Linux
-About 40k avaliable ports (/2 for socks)
+Each v2ray instance eats about ~17MB of RAM on Linux, under 10MB on W11
 
 ## License
 
