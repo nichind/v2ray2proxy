@@ -29,7 +29,7 @@ keywords = [
     "shadowsocks",
     "trojan",
 ]
-dependencies = []
+dependencies = ["psutil"]
 
 [project.urls]
 "Homepage" = "https://github.com/nichind/v2ray2proxy"

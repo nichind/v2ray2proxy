@@ -11,6 +11,56 @@ import urllib.parse
 import socket
 import signal
 import threading
+import weakref
+import psutil
+
+
+# Global registry to track all active processes
+_active_processes = weakref.WeakSet()
+_cleanup_lock = threading.RLock()
+_signal_handlers_registered = False
+
+
+def _register_signal_handlers():
+    """Register signal handlers for process cleanup."""
+    global _signal_handlers_registered
+    if _signal_handlers_registered:
+        return
+    
+    def cleanup_handler(signum, frame):
+        logging.info(f"Received signal {signum}, cleaning up V2Ray processes...")
+        _cleanup_all_processes()
+        # Re-raise the signal for default handling
+        signal.signal(signum, signal.SIG_DFL)
+        os.kill(os.getpid(), signum)
+    
+    # Register handlers for common termination signals
+    if os.name != 'nt':  # Unix-like systems
+        signal.signal(signal.SIGTERM, cleanup_handler)
+        signal.signal(signal.SIGINT, cleanup_handler)
+        signal.signal(signal.SIGHUP, cleanup_handler)
+    else:  # Windows
+        signal.signal(signal.SIGTERM, cleanup_handler)
+        signal.signal(signal.SIGINT, cleanup_handler)
+    
+    _signal_handlers_registered = True
+
+
+def _cleanup_all_processes():
+    """Emergency cleanup of all tracked processes."""
+    with _cleanup_lock:
+        processes_to_cleanup = list(_active_processes)
+        for process_ref in processes_to_cleanup:
+            try:
+                if hasattr(process_ref, '_emergency_cleanup'):
+                    process_ref._emergency_cleanup()
+            except Exception as e:
+                logging.error(f"Error in emergency cleanup: {e}")
+
+
+# Register signal handlers and atexit cleanup
+_register_signal_handlers()
+atexit.register(_cleanup_all_processes)
 
 
 class V2RayCore:
@@ -186,13 +236,11 @@ class V2RayProxy:
         self.v2ray_process = None
         self.config_file_path = None
         self.running = False
-        self._cleanup_lock = threading.Lock()
-        self._cleanup_registered = False
+        self._cleanup_lock = threading.RLock()
+        self._process_terminated = threading.Event()
 
-        # Register cleanup on exit only once
-        if not self._cleanup_registered:
-            atexit.register(self._safe_cleanup)
-            self._cleanup_registered = True
+        # Register this instance for global cleanup
+        _active_processes.add(self)
 
         # Start V2Ray if not in config_only mode
         if not config_only:
@@ -513,26 +561,29 @@ class V2RayProxy:
             if os.name == "posix" and not os.access(v2ray_exe, os.X_OK):
                 raise PermissionError(f"V2Ray executable {v2ray_exe} is not executable")
 
-            # Use shell=True on Windows to avoid path issues
-            use_shell = os.name == "nt"
-
-            # Log the exact command being executed
+            # Prepare command and environment
             cmd = [v2ray_exe, "-config", config_path]
             logging.info(f"Starting V2Ray with command: {' '.join(cmd)}")
 
-            # Start v2ray with this configuration
-            self.v2ray_process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                shell=use_shell,
-                universal_newlines=True,  # Use text mode for output
-            )
+            # Set up process creation flags for better process management
+            kwargs = {
+                'stdout': subprocess.PIPE,
+                'stderr': subprocess.PIPE,
+                'universal_newlines': True,
+            }
 
-            # Wait a brief moment to see if process terminates immediately
+            if os.name == 'nt':  # Windows
+                kwargs['shell'] = True
+                kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
+            else:  # Unix-like systems
+                kwargs['preexec_fn'] = os.setsid  # Create new process group
+
+            # Start v2ray process
+            self.v2ray_process = subprocess.Popen(cmd, **kwargs)
+            self._process_terminated.clear()
+
+            # Quick check if process started successfully
             time.sleep(0.05)
-
-            # Check if v2ray is still running
             if self.v2ray_process.poll() is not None:
                 stdout, stderr = self.v2ray_process.communicate()
                 error_msg = f"V2Ray exited with code {self.v2ray_process.returncode}.\nStdout: {stdout}\nStderr: {stderr}"
@@ -554,9 +605,9 @@ class V2RayProxy:
                 logging.info(f"V2Ray started successfully on SOCKS port {self.socks_port}, HTTP port {self.http_port}")
             except Exception:
                 # If checking fails, terminate the process and raise the exception
-                self.v2ray_process.terminate()
+                self._terminate_process(timeout=1)
                 try:
-                    stdout, stderr = self.v2ray_process.communicate(timeout=5)
+                    stdout, stderr = self.v2ray_process.communicate(timeout=2)
                     logging.error(f"V2Ray output after failed start: Stdout: {stdout}, Stderr: {stderr}")
                 except Exception:
                     pass
@@ -564,79 +615,34 @@ class V2RayProxy:
 
         except Exception as e:
             logging.error(f"Error starting V2Ray: {str(e)}")
-            self.cleanup()
+            self._safe_cleanup()  # Use _safe_cleanup instead of cleanup to avoid recursion
             raise
 
-    def _terminate_process(self, timeout=10) -> bool:
-        """
-        Safely terminate the V2Ray process with platform-specific handling.
+    def stop(self):
+        """Stop the V2Ray process and clean up resources."""
+        with self._cleanup_lock:
+            if not self.running and self.v2ray_process is None:
+                return
 
-        Args:
-            timeout (int): Maximum time to wait for process to terminate
+            try:
+                # Terminate the process with short timeout for speed
+                if self.v2ray_process is not None:
+                    success = self._terminate_process(timeout=1)
+                    if not success:
+                        logging.warning("V2Ray process may not have terminated cleanly")
 
-        Returns:
-            bool: True if process was terminated successfully
-        """
-        if self.v2ray_process is None:
-            return True
+                self.running = False
+                logging.info("V2Ray process stopped")
 
-        try:
-            # Check if process is already terminated
-            if self.v2ray_process.poll() is not None:
-                return True
+            except Exception as e:
+                logging.error(f"Error stopping V2Ray: {str(e)}")
+            finally:
+                # Always clean up resources
+                self._cleanup_internal()
 
-            logging.info(f"Terminating V2Ray process (PID: {self.v2ray_process.pid})")
-
-            # Platform-specific termination
-            if os.name == "nt":  # Windows
-                # Use taskkill on Windows for more reliable termination
-                try:
-                    subprocess.run(
-                        ["taskkill", "/F", "/T", "/PID", str(self.v2ray_process.pid)], check=False, capture_output=True, timeout=5
-                    )
-                    # Wait a bit for process to terminate
-                    time.sleep(0.5)
-                except (subprocess.TimeoutExpired, FileNotFoundError):
-                    # Fall back to terminate if taskkill fails
-                    try:
-                        self.v2ray_process.terminate()
-                        time.sleep(0.5)
-                        if self.v2ray_process.poll() is None:
-                            self.v2ray_process.kill()
-                    except ProcessLookupError:
-                        pass  # Process already terminated
-            else:  # Unix-like systems
-                try:
-                    # Send SIGTERM first
-                    self.v2ray_process.terminate()
-
-                    # Wait for graceful shutdown
-                    try:
-                        self.v2ray_process.wait(timeout=timeout // 2)
-                        return True
-                    except subprocess.TimeoutExpired:
-                        logging.warning("V2Ray process did not terminate gracefully, sending SIGKILL")
-                        # Force kill if graceful termination fails
-                        self.v2ray_process.kill()
-                        self.v2ray_process.wait(timeout=2)
-                except ProcessLookupError:
-                    # Process already terminated
-                    return True
-
-            # Final check if process terminated
-            start_time = time.time()
-            while time.time() - start_time < timeout:
-                if self.v2ray_process.poll() is not None:
-                    logging.info("V2Ray process terminated successfully")
-                    return True
-                time.sleep(0.1)
-
-            logging.error(f"Failed to terminate V2Ray process within {timeout} seconds")
-            return False
-
-        except Exception as e:
-            logging.error(f"Error terminating V2Ray process: {str(e)}")
-            return False
+    def cleanup(self):
+        """Clean up temporary files and resources."""
+        self._safe_cleanup()
 
     def _safe_cleanup(self):
         """Thread-safe cleanup method."""
@@ -660,31 +666,210 @@ class V2RayProxy:
         self.v2ray_process = None
         self.running = False
 
-    def stop(self):
-        """Stop the V2Ray process and clean up resources."""
-        with self._cleanup_lock:
-            if not self.running and self.v2ray_process is None:
-                return
+    def _terminate_process(self, timeout=2) -> bool:
+        """
+        Fast and reliable process termination with cross-platform support.
+        
+        Args:
+            timeout (int): Maximum time to wait for graceful termination
+            
+        Returns:
+            bool: True if process was terminated successfully
+        """
+        if self.v2ray_process is None:
+            return True
 
+        try:
+            # Check if process is already terminated
+            if self.v2ray_process.poll() is not None:
+                self._process_terminated.set()
+                return True
+
+            pid = self.v2ray_process.pid
+            logging.debug(f"Terminating V2Ray process (PID: {pid})")
+
+            if os.name == 'nt':  # Windows
+                return self._terminate_windows_process(pid, timeout)
+            else:  # Unix-like systems  
+                return self._terminate_unix_process(pid, timeout)
+
+        except Exception as e:
+            logging.error(f"Error terminating V2Ray process: {e}")
+            return False
+
+    def _terminate_windows_process(self, pid, timeout):
+        """Terminate process on Windows."""
+        try:
+            # Use psutil for more reliable process management
             try:
-                # Terminate the process
-                if self.v2ray_process is not None:
-                    success = self._terminate_process(timeout=1)
-                    if not success:
-                        logging.warning("V2Ray process may not have terminated cleanly")
+                parent = psutil.Process(pid)
+                children = parent.children(recursive=True)
+                
+                # Terminate children first
+                for child in children:
+                    try:
+                        child.terminate()
+                    except psutil.NoSuchProcess:
+                        pass
+                
+                # Terminate parent
+                parent.terminate()
+                
+                # Wait for termination
+                try:
+                    parent.wait(timeout=timeout)
+                    self._process_terminated.set()
+                    return True
+                except psutil.TimeoutExpired:
+                    # Force kill if timeout
+                    logging.warning("Process didn't terminate gracefully, force killing")
+                    for child in children:
+                        try:
+                            child.kill()
+                        except psutil.NoSuchProcess:
+                            pass
+                    parent.kill()
+                    parent.wait(timeout=1)
+                    self._process_terminated.set()
+                    return True
+                    
+            except psutil.NoSuchProcess:
+                # Process already terminated
+                self._process_terminated.set()
+                return True
+                
+        except ImportError:
+            # Fallback to subprocess if psutil not available
+            try:
+                subprocess.run(['taskkill', '/F', '/T', '/PID', str(pid)], 
+                             check=False, capture_output=True, timeout=timeout)
+                time.sleep(0.1)
+                if self.v2ray_process.poll() is not None:
+                    self._process_terminated.set()
+                    return True
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                pass
+            
+            # Final fallback
+            try:
+                self.v2ray_process.terminate()
+                self.v2ray_process.wait(timeout=timeout)
+                self._process_terminated.set()
+                return True
+            except subprocess.TimeoutExpired:
+                self.v2ray_process.kill()
+                self.v2ray_process.wait(timeout=1)
+                self._process_terminated.set()
+                return True
 
-                self.running = False
-                logging.info("V2Ray process stopped")
+    def _terminate_unix_process(self, pid, timeout):
+        """Terminate process on Unix-like systems."""
+        try:
+            # Use psutil for better process management
+            try:
+                parent = psutil.Process(pid)
+                children = parent.children(recursive=True)
+                
+                # Send SIGTERM to all processes
+                for child in children:
+                    try:
+                        child.terminate()
+                    except psutil.NoSuchProcess:
+                        pass
+                parent.terminate()
+                
+                # Wait for graceful termination
+                try:
+                    parent.wait(timeout=timeout)
+                    self._process_terminated.set()
+                    return True
+                except psutil.TimeoutExpired:
+                    # Force kill if timeout
+                    logging.warning("Process didn't terminate gracefully, sending SIGKILL")
+                    for child in children:
+                        try:
+                            child.kill()
+                        except psutil.NoSuchProcess:
+                            pass
+                    parent.kill()
+                    parent.wait(timeout=1)
+                    self._process_terminated.set()
+                    return True
+                    
+            except psutil.NoSuchProcess:
+                # Process already terminated
+                self._process_terminated.set()
+                return True
+                
+        except ImportError:
+            # Fallback without psutil
+            try:
+                # Create process group to manage child processes
+                if hasattr(os, 'killpg'):
+                    try:
+                        # Try to kill the entire process group
+                        os.killpg(os.getpgid(pid), signal.SIGTERM)
+                        
+                        # Wait for termination
+                        start_time = time.time()
+                        while time.time() - start_time < timeout:
+                            if self.v2ray_process.poll() is not None:
+                                self._process_terminated.set()
+                                return True
+                            time.sleep(0.05)
+                        
+                        # Force kill if timeout
+                        os.killpg(os.getpgid(pid), signal.SIGKILL)
+                        self.v2ray_process.wait(timeout=1)
+                        self._process_terminated.set()
+                        return True
+                        
+                    except (ProcessLookupError, OSError):
+                        # Process group doesn't exist, try individual process
+                        pass
+                
+                # Fallback to individual process termination
+                self.v2ray_process.terminate()
+                try:
+                    self.v2ray_process.wait(timeout=timeout)
+                    self._process_terminated.set()
+                    return True
+                except subprocess.TimeoutExpired:
+                    self.v2ray_process.kill()
+                    self.v2ray_process.wait(timeout=1)
+                    self._process_terminated.set()
+                    return True
+                    
+            except (ProcessLookupError, OSError):
+                # Process already terminated
+                self._process_terminated.set()
+                return True
 
-            except Exception as e:
-                logging.error(f"Error stopping V2Ray: {str(e)}")
-            finally:
-                # Always clean up resources
-                self._cleanup_internal()
-
-    def cleanup(self):
-        """Clean up temporary files and resources."""
-        self._safe_cleanup()
+    def _emergency_cleanup(self):
+        """Emergency cleanup called by signal handler."""
+        try:
+            if self.v2ray_process and self.v2ray_process.poll() is None:
+                if os.name == 'nt':
+                    # Windows - force kill immediately
+                    try:
+                        subprocess.run(['taskkill', '/F', '/T', '/PID', str(self.v2ray_process.pid)], 
+                                     check=False, capture_output=True, timeout=1)
+                    except:
+                        try:
+                            self.v2ray_process.kill()
+                        except:
+                            pass
+                else:
+                    # Unix - force kill process group
+                    try:
+                        os.killpg(os.getpgid(self.v2ray_process.pid), signal.SIGKILL)
+                    except:
+                        try:
+                            self.v2ray_process.kill()
+                        except:
+                            pass
+        except Exception:
+            pass  # Suppress all exceptions in emergency cleanup
 
     @property
     def socks5_proxy_url(self):
@@ -699,10 +884,13 @@ class V2RayProxy:
     def __del__(self):
         """Ensure resources are cleaned up when the object is garbage collected."""
         try:
+            # Emergency cleanup - don't wait
+            if self.v2ray_process and self.v2ray_process.poll() is None:
+                self._emergency_cleanup()
             self._safe_cleanup()
-        except Exception as e:
-            # Avoid raising exceptions in __del__
-            logging.warning(f"Error during V2RayProxy cleanup: {str(e)}")
+        except Exception:
+            # Suppress all exceptions in __del__
+            pass
 
 
 class V2RayPool:
@@ -730,6 +918,9 @@ class V2RayPool:
         if v2ray_links:
             for link in v2ray_links:
                 self.add_proxy(link)
+
+        # Register this pool for global cleanup
+        _active_processes.add(self)
 
     def add_proxy(self, v2ray_link, start=True):
         """
@@ -841,7 +1032,9 @@ class V2RayPool:
     def stop_all(self):
         """Stop all proxies in the pool."""
         errors = []
-        for proxy_id in list(self.active_proxies):
+        
+        # Use threading to stop proxies in parallel for speed
+        def stop_proxy_thread(proxy_id):
             try:
                 self.proxies[proxy_id].stop()
             except Exception as e:
@@ -849,10 +1042,32 @@ class V2RayPool:
                 logging.error(error_msg)
                 errors.append(error_msg)
 
+        # Start threads for each proxy
+        threads = []
+        for proxy_id in list(self.active_proxies):
+            thread = threading.Thread(target=stop_proxy_thread, args=(proxy_id,))
+            thread.start()
+            threads.append(thread)
+
+        # Wait for all threads to complete with timeout
+        for thread in threads:
+            thread.join(timeout=2)  # Don't wait too long
+
         self.active_proxies.clear()
 
         if errors:
             logging.warning(f"Encountered {len(errors)} errors while stopping proxies")
+
+    def _emergency_cleanup(self):
+        """Emergency cleanup for the entire pool."""
+        try:
+            for proxy in self.proxies.values():
+                try:
+                    proxy._emergency_cleanup()
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     def restart_proxy(self, proxy_id):
         """
@@ -1164,7 +1379,7 @@ class V2RayPool:
     def __del__(self):
         """Ensure resources are cleaned up when the object is garbage collected."""
         try:
-            self.stop()
-        except Exception as e:
-            # Avoid raising exceptions in __del__
-            logging.warning(f"Error during V2RayPool cleanup: {str(e)}")
+            self._emergency_cleanup()
+        except Exception:
+            # Suppress all exceptions in __del__
+            pass
