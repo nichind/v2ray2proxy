@@ -30,7 +30,7 @@ class TestAsyncV2RayProxy(unittest.IsolatedAsyncioTestCase):
         proxy = V2RayProxy(TEST_LINK)
         try:
             # List of URLs to fetch
-            urls = ["https://api.ipify.org?format=json", "https://httpbin.org/get", "https://httpbin.org/ip"]
+            urls = ["https://api.ipify.org?format=json", "https://api.ipify.org?format=json", "https://api.ipify.org?format=json"]
 
             # Create a session with the proxy
             async with aiohttp.ClientSession() as session:
@@ -78,10 +78,10 @@ class TestAsyncV2RayProxy(unittest.IsolatedAsyncioTestCase):
             async with aiohttp.ClientSession(connector=connector) as session:
                 try:
                     # Use HTTP proxy URL since aiohttp-socks isn't included by default
-                    async with session.get("https://httpbin.org/get", proxy=proxy.http_proxy_url, timeout=10) as response:
+                    async with session.get("https://api.ipify.org?format=json", proxy=proxy.http_proxy_url, timeout=10) as response:
                         self.assertEqual(response.status, 200)
                         data = await response.json()
-                        self.assertIn("origin", data)
+                        self.assertIn("ip", data)
                 except ImportError:
                     self.skipTest("aiohttp-socks not installed")
         finally:
