@@ -29,11 +29,7 @@ keywords = [
     "shadowsocks",
     "trojan",
 ]
-dependencies = [
-    "requests>=2.25.0",
-    "aiohttp>=3.7.0",
-    "pysocks>=1.7.1",
-]
+dependencies = []
 
 [project.urls]
 "Homepage" = "https://github.com/nichind/v2ray2proxy"
