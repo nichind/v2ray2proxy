@@ -17,7 +17,7 @@ class V2RayCore:
     """Represents executable of V2Ray core."""
 
     def __init__(self):
-        self.release_tag_url = os.environ.get("V2RAY_RELASE_TAG_URL") or "https://github.com/v2fly/v2ray-core/releases/download/v4.31.0"
+        self.release_tag_url = os.environ.get("V2RAY_RELASE_TAG_URL") or "https://github.com/v2fly/v2ray-core/releases/download/v4.45.2"
         if os.environ.get("V2RAY_EXECUTABLE_DIR"):
             self.executable_dir = os.environ["V2RAY_EXECUTABLE_DIR"]
             self.executable = os.path.join(self.executable_dir, "v2ray.exe" if os.name == "nt" else "v2ray")
@@ -199,15 +199,32 @@ class V2RayProxy:
             self.start()
 
     def _is_port_in_use(self, port: int) -> bool:
-        """Check if a port is currently in use."""
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            return s.connect_ex(("localhost", port)) == 0
+        """Check if a port is currently in use by trying to bind to it."""
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                s.bind(('localhost', port))
+                return False
+        except (socket.error, OSError):
+            return True
 
     def _pick_unused_port(self, exclude_port: int = None) -> int:
-        for _ in range(500):
-            port = random.randint(10000, 65535)
-            if not self._is_port_in_use(port) and port != exclude_port:
+        # Try to get a system-assigned port first
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(('localhost', 0))  # Let OS choose a free port
+                _, port = s.getsockname()
+                if port != exclude_port:
+                    return port
+        except Exception as e:
+            logging.warning(f"Failed to get system-assigned port: {str(e)}")
+            
+        # If that fails, try a few random ports
+        for _ in range(100):
+            port = random.randint(10000, 65000)
+            if port != exclude_port and not self._is_port_in_use(port):
                 return port
+                
         raise RuntimeError("Could not find an unused port")
 
     def _parse_vmess_link(self, link: str) -> dict:
@@ -550,7 +567,7 @@ class V2RayProxy:
             self.cleanup()
             raise
 
-    def _terminate_process(self, timeout=10):
+    def _terminate_process(self, timeout=10) -> bool:
         """
         Safely terminate the V2Ray process with platform-specific handling.
 
@@ -652,7 +669,7 @@ class V2RayProxy:
             try:
                 # Terminate the process
                 if self.v2ray_process is not None:
-                    success = self._terminate_process(timeout=5)  # Reduced timeout for faster cleanup
+                    success = self._terminate_process(timeout=1)
                     if not success:
                         logging.warning("V2Ray process may not have terminated cleanly")
 

@@ -12,7 +12,7 @@ dynamic = ["version"]
 authors = [
     {name = "nichind", email = "nichinddev@gmail.com"},
 ]
-description = "🌩️ Seamlessly convert vless://, vmess://, ss:// , trojan:// to socks/http proxies in your python HTTP clients"
+description = "🐍 Convert v2ray (vless://, vmess://, ss:// , trojan://) to local socks5:// & http:// proxies"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
