@@ -1,62 +1,134 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>V2Ray Proxy Tester</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         .proxy-item {
-            margin: 2px 0;
-            padding: 5px;
-            border-radius: 3px;
-            font-size: 0.9em;
-            cursor: pointer;
+            border-bottom: 1px solid var(--bs-border-color);
+            padding: 12px 16px;
+            transition: background-color 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 60px;
+        }
+        .proxy-item:hover {
+            background-color: var(--bs-secondary-bg);
+        }
+        .proxy-item:last-child {
+            border-bottom: none;
         }
         .proxy-working {
-            background-color: #d4edda;
             border-left: 4px solid #28a745;
         }
         .proxy-failed {
-            background-color: #f8d7da;
             border-left: 4px solid #dc3545;
         }
         .proxy-container {
-            max-height: 400px;
+            max-height: 500px;
             overflow-y: auto;
+            scroll-behavior: smooth;
         }
-        .progress-container {
-            position: sticky;
-            top: 0;
-            background: white;
-            z-index: 100;
-            padding: 10px 0;
-            border-bottom: 1px solid #dee2e6;
+        
+        .proxy-link {
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            word-break: break-all;
+            flex: 1;
+            margin-right: 12px;
+            color: var(--bs-body-color);
         }
-        .stats-card {
-            transition: all 0.3s ease;
+        
+        .proxy-actions {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            flex-shrink: 0;
         }
-        .stats-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-        .log-container {
-            max-height: 200px;
-            overflow-y: auto;
-            background: #f8f9fa;
-            font-family: monospace;
+        
+        .proxy-status {
+            font-weight: 600;
             font-size: 0.8em;
+            min-width: 45px;
+            text-align: center;
         }
-        .copy-btn {
+        
+        .btn-proxy-action {
+            padding: 4px 8px;
+            font-size: 0.75em;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-proxy-action:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .btn-view {
+            background-color: #17a2b8;
+            color: white;
+        }
+        .btn-view:hover {
+            background-color: #138496;
+            color: white;
+        }
+        
+        .btn-copy {
+            background-color: #28a745;
+            color: white;
+        }
+        .btn-copy:hover {
+            background-color: #218838;
+            color: white;
+        }
+        
+        /* Smooth scrolling for the container */
+        .proxy-container {
+            scrollbar-width: thin;
+            scrollbar-color: var(--bs-secondary) var(--bs-body-bg);
+        }
+        
+        .proxy-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .proxy-container::-webkit-scrollbar-track {
+            background: var(--bs-body-bg);
+        }
+        
+        .proxy-container::-webkit-scrollbar-thumb {
+            background-color: var(--bs-secondary);
+            border-radius: 4px;
+        }
+        
+        .proxy-container::-webkit-scrollbar-thumb:hover {
+            background-color: var(--bs-secondary-color);
+        }
+
+        /* Dark mode specific styles */
+        html[data-bs-theme="dark"] .proxy-working {
+            background-color: rgba(40, 167, 69, 0.2);
+        }
+        html[data-bs-theme="dark"] .proxy-failed {
+            background-color: rgba(220, 53, 69, 0.2);
+        }
+        
+        /* Theme toggle button */
+        .theme-toggle {
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 20px;
             transition: all 0.3s ease;
         }
-        .copy-btn:hover {
+        .theme-toggle:hover {
             transform: scale(1.05);
-        }
-        .tooltip-inner {
-            max-width: 500px;
-            text-align: left;
         }
     </style>
 </head>
@@ -69,7 +141,11 @@
                         <i class="fas fa-network-wired text-primary"></i>
                         V2Ray Proxy Tester
                     </h1>
-                    <div class="d-flex gap-2">
+                    <div class="d-flex gap-2 align-items-center">
+                        <div class="theme-toggle" id="themeToggle">
+                            <i class="fas fa-sun" id="lightIcon"></i>
+                            <i class="fas fa-moon" id="darkIcon" style="display: none;"></i>
+                        </div>
                         <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#historyModal">
                             <i class="fas fa-history"></i> History
                         </button>
@@ -79,6 +155,21 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- Session Reconnect Alert -->
+        <div id="sessionAlert" class="alert alert-info alert-dismissible fade show" style="display: none;" role="alert">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="fas fa-info-circle me-2"></i>
+                    <span id="sessionMessage">A previously running test was detected.</span>
+                </div>
+                <div class="d-flex gap-2">
+                    <button id="reconnectBtn" class="btn btn-sm btn-primary">Reconnect</button>
+                    <button id="discardBtn" class="btn btn-sm btn-outline-danger">Discard</button>
+                </div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
 
         <!-- Configuration Form -->
@@ -235,6 +326,34 @@
                                 </div>
                             </div>
                         </div>
+                        
+                        <!-- Additional Stats Row -->
+                        <div class="row text-center mt-3">
+                            <div class="col-6 col-md-3">
+                                <div class="stats-card">
+                                    <div class="h4 mb-0 text-info" id="etaTime">-</div>
+                                    <small class="text-muted">ETA</small>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="stats-card">
+                                    <div class="h4 mb-0 text-primary" id="processCount">0</div>
+                                    <small class="text-muted">V2Ray Processes</small>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="stats-card">
+                                    <div class="h4 mb-0 text-warning" id="memoryUsage">0 MB</div>
+                                    <small class="text-muted">Memory Usage</small>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="stats-card">
+                                    <div class="h4 mb-0 text-danger" id="cpuUsage">0%</div>
+                                    <small class="text-muted">CPU Usage</small>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -253,16 +372,69 @@
                                 <button class="btn btn-success btn-sm copy-btn" id="copyBtn">
                                     <i class="fas fa-copy"></i> Copy All
                                 </button>
-                                <button class="btn btn-primary btn-sm" id="downloadBtn">
-                                    <i class="fas fa-download"></i> Download
-                                </button>
+                                <div class="btn-group" role="group">
+                                    <button class="btn btn-primary btn-sm" id="downloadJsonBtn">
+                                        <i class="fas fa-download"></i> JSON
+                                    </button>
+                                    <button class="btn btn-outline-primary btn-sm" id="downloadTxtBtn">
+                                        <i class="fas fa-file-text"></i> TXT
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body p-0">
                         <div class="proxy-container" id="workingProxiesList">
                             <!-- Working proxies will be displayed here -->
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Response Modal -->
+        <div class="modal fade" id="responseModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fas fa-eye"></i> Response Details
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Proxy Link:</label>
+                            <div class="font-monospace bg-light p-2 rounded" id="modalProxyLink"></div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Response Status:</label>
+                            <span id="modalResponseStatus" class="badge bg-success fs-6"></span>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Test URL:</label>
+                            <div class="font-monospace bg-light p-2 rounded" id="modalTestUrl"></div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Response Body:</label>
+                            <pre class="bg-light p-3 rounded" style="max-height: 300px; overflow-y: auto;"><code id="modalResponseBody"></code></pre>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Attempt:</label>
+                                <div id="modalAttempt"></div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Test Time:</label>
+                                <div id="modalTestTime"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-primary" id="modalCopyBtn">
+                            <i class="fas fa-copy"></i> Copy Proxy Link
+                        </button>
                     </div>
                 </div>
             </div>
@@ -298,10 +470,16 @@
                                         <td><span class="badge bg-success">{{ result.working_proxies }}</span></td>
                                         <td>{{ result.test_url }}</td>
                                         <td>
-                                            <a href="{{ url_for('download_previous', filename=result.filename) }}" 
-                                               class="btn btn-sm btn-outline-primary">
-                                                <i class="fas fa-download"></i> Download
-                                            </a>
+                                            <div class="btn-group" role="group">
+                                                <a href="{{ url_for('download_previous', filename=result.filename, format_type='json') }}" 
+                                                   class="btn btn-sm btn-primary">
+                                                    <i class="fas fa-download"></i> JSON
+                                                </a>
+                                                <a href="{{ url_for('download_previous', filename=result.filename, format_type='txt') }}" 
+                                                   class="btn btn-sm btn-outline-primary">
+                                                    <i class="fas fa-file-text"></i> TXT
+                                                </a>
+                                            </div>
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -314,23 +492,114 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <script>
         // Global variables
         let socket;
         let currentSessionId = null;
         let isTestRunning = false;
-
+        
+        // Theme management
+        const htmlElement = document.documentElement;
+        const themeToggle = document.getElementById('themeToggle');
+        const lightIcon = document.getElementById('lightIcon');
+        const darkIcon = document.getElementById('darkIcon');
+        
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            initTheme();
+            initializeSocket();
+            setupEventListeners();
+            updateInputFields();
+            checkExistingSession();
+        });
+        
+        // Initialize theme based on system preference or saved preference
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            
+            if (savedTheme) {
+                applyTheme(savedTheme);
+            } else {
+                // Check system preference
+                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    applyTheme('dark');
+                } else {
+                    applyTheme('light');
+                }
+            }
+            
+            // Listen for system theme changes
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+                if (!localStorage.getItem('theme')) {
+                    applyTheme(e.matches ? 'dark' : 'light');
+                }
+            });
+        }
+        
+        // Apply theme
+        function applyTheme(theme) {
+            htmlElement.setAttribute('data-bs-theme', theme);
+            
+            if (theme === 'dark') {
+                lightIcon.style.display = 'none';
+                darkIcon.style.display = 'inline-block';
+            } else {
+                lightIcon.style.display = 'inline-block';
+                darkIcon.style.display = 'none';
+            }
+            
+            localStorage.setItem('theme', theme);
+        }
+        
+        // Toggle theme
+        function toggleTheme() {
+            const currentTheme = htmlElement.getAttribute('data-bs-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            applyTheme(newTheme);
+        }
+        
+        // Check for existing session
+        function checkExistingSession() {
+            const savedSession = localStorage.getItem('currentSessionId');
+            const sessionTimestamp = localStorage.getItem('sessionTimestamp');
+            
+            if (savedSession) {
+                // Check if session is not too old (24 hours)
+                const now = new Date().getTime();
+                const sessionTime = parseInt(sessionTimestamp || '0');
+                
+                if (now - sessionTime < 24 * 60 * 60 * 1000) {
+                    // Show session alert
+                    document.getElementById('sessionAlert').style.display = 'block';
+                    document.getElementById('sessionMessage').textContent = 
+                        'A previously running test was detected. Would you like to reconnect?';
+                }
+            }
+        }
+        
         // Initialize Socket.IO
         function initializeSocket() {
+            // Disconnect any existing socket connection
+            if (socket) {
+                socket.disconnect();
+            }
+            
             socket = io();
             
             socket.on('connect', function() {
                 console.log('Connected to server');
+                
+                // Join room if session exists
+                if (currentSessionId) {
+                    console.log('Joining room:', currentSessionId);
+                    socket.emit('join', { session_id: currentSessionId });
+                }
             });
             
             socket.on('progress_update', function(data) {
+                console.log('Received progress update:', data.progress + '%');
                 updateProgress(data);
             });
             
@@ -339,21 +608,84 @@
                 isTestRunning = false;
                 updateProgress(data);
                 showNotification('Test completed successfully!', 'success');
+                
+                // Clear session from storage when test completes
+                if (data.session_id === currentSessionId) {
+                    discardSession();
+                }
             });
             
             socket.on('test_error', function(data) {
                 console.error('Test error:', data);
                 isTestRunning = false;
                 showNotification('Test failed: ' + data.error, 'danger');
+                
+                // Clear session from storage on error
+                discardSession();
+            });
+            
+            socket.on('disconnect', function() {
+                console.log('Disconnected from server');
+            });
+            
+            socket.on('connect_error', function(error) {
+                console.error('Connection error:', error);
+                showNotification('Connection error. Trying to reconnect...', 'warning');
             });
         }
-
-        // Initialize page
-        document.addEventListener('DOMContentLoaded', function() {
-            initializeSocket();
-            setupEventListeners();
-            updateInputFields();
-        });
+        
+        // Reconnect to existing session
+        function reconnectToSession() {
+            const savedSession = localStorage.getItem('currentSessionId');
+            if (savedSession) {
+                currentSessionId = savedSession;
+                
+                // Get session status
+                fetch(`/get_status/${currentSessionId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            showNotification('Session no longer exists: ' + data.error, 'warning');
+                            discardSession();
+                            return;
+                        }
+                        
+                        // Session exists, update UI
+                        isTestRunning = data.is_running;
+                        document.getElementById('progressSection').style.display = 'block';
+                        document.getElementById('resultsSection').style.display = 'block';
+                        
+                        if (isTestRunning) {
+                            document.getElementById('startBtn').disabled = true;
+                        } else {
+                            document.getElementById('startBtn').disabled = false;
+                        }
+                        
+                        // Update progress
+                        updateProgress(data);
+                        document.getElementById('sessionAlert').style.display = 'none';
+                        
+                        // Reinitialize socket to join the room properly
+                        initializeSocket();
+                        
+                        showNotification('Reconnected to existing session', 'success');
+                    })
+                    .catch(error => {
+                        console.error('Error reconnecting to session:', error);
+                        showNotification('Failed to reconnect to session', 'danger');
+                        discardSession();
+                    });
+            }
+        }
+        
+        // Discard session
+        function discardSession() {
+            localStorage.removeItem('currentSessionId');
+            localStorage.removeItem('sessionTimestamp');
+            currentSessionId = null;
+            isTestRunning = false;
+            document.getElementById('sessionAlert').style.display = 'none';
+        }
 
         // Setup event listeners
         function setupEventListeners() {
@@ -361,7 +693,15 @@
             document.getElementById('testForm').addEventListener('submit', startTest);
             document.getElementById('stopBtn').addEventListener('click', stopTest);
             document.getElementById('copyBtn').addEventListener('click', copyWorkingProxies);
-            document.getElementById('downloadBtn').addEventListener('click', downloadResults);
+            document.getElementById('downloadJsonBtn').addEventListener('click', () => downloadResults('json'));
+            document.getElementById('downloadTxtBtn').addEventListener('click', () => downloadResults('txt'));
+            
+            // Theme toggle
+            document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+            
+            // Session management
+            document.getElementById('reconnectBtn').addEventListener('click', reconnectToSession);
+            document.getElementById('discardBtn').addEventListener('click', discardSession);
         }
 
         // Update input fields based on selection
@@ -437,6 +777,14 @@
                 if (data.success) {
                     currentSessionId = data.session_id;
                     isTestRunning = true;
+                    
+                    // Save session to localStorage
+                    localStorage.setItem('currentSessionId', currentSessionId);
+                    localStorage.setItem('sessionTimestamp', new Date().getTime().toString());
+                    
+                    // Join socket.io room
+                    socket.emit('join', { session_id: currentSessionId });
+                    
                     document.getElementById('progressSection').style.display = 'block';
                     document.getElementById('resultsSection').style.display = 'block';
                     document.getElementById('startBtn').disabled = true;
@@ -481,6 +829,22 @@
             });
         }
 
+        // Format time function
+        function formatTime(seconds) {
+            if (seconds < 60) {
+                return Math.round(seconds) + 's';
+            } else if (seconds < 3600) {
+                const minutes = Math.floor(seconds / 60);
+                const remainingSeconds = Math.round(seconds % 60);
+                return `${minutes}m ${remainingSeconds}s`;
+            } else {
+                const hours = Math.floor(seconds / 3600);
+                const minutes = Math.floor((seconds % 3600) / 60);
+                const remainingSeconds = Math.round(seconds % 60);
+                return `${hours}h ${minutes}m ${remainingSeconds}s`;
+            }
+        }
+        
         // Update progress
         function updateProgress(data) {
             const progressBar = document.getElementById('progressBar');
@@ -490,6 +854,10 @@
             const failedProxies = document.getElementById('failedProxies');
             const successRate = document.getElementById('successRate');
             const elapsedTime = document.getElementById('elapsedTime');
+            const etaTime = document.getElementById('etaTime');
+            const processCount = document.getElementById('processCount');
+            const memoryUsage = document.getElementById('memoryUsage');
+            const cpuUsage = document.getElementById('cpuUsage');
             
             // Update progress bar
             progressBar.style.width = data.progress + '%';
@@ -503,7 +871,25 @@
             
             const rate = data.tested_proxies > 0 ? (data.working_proxies / data.tested_proxies * 100).toFixed(1) : 0;
             successRate.textContent = rate + '%';
-            elapsedTime.textContent = data.elapsed_time + 's';
+            
+            // Format and update time displays
+            elapsedTime.textContent = formatTime(data.elapsed_time);
+            
+            // Update ETA
+            if (data.eta > 0 && data.progress < 100) {
+                etaTime.textContent = formatTime(data.eta);
+            } else if (data.progress >= 100) {
+                etaTime.textContent = 'Complete';
+            } else {
+                etaTime.textContent = 'Calculating...';
+            }
+            
+            // Update resource usage
+            if (data.resource_usage) {
+                processCount.textContent = data.resource_usage.v2ray_processes || 0;
+                memoryUsage.textContent = (data.resource_usage.memory_mb || 0).toFixed(1) + ' MB';
+                cpuUsage.textContent = (data.resource_usage.cpu_percent || 0).toFixed(1) + '%';
+            }
             
             // Update working proxies list
             updateWorkingProxiesList(data.working_proxy_list);
@@ -516,77 +902,167 @@
             }
         }
 
-        // Update working proxies list
+        // Global variable to track current scroll position
+        let lastScrollPosition = 0;
+        let isUserScrolling = false;
+        let scrollTimeout;
+
+        // Update working proxies list with improved UX
         function updateWorkingProxiesList(workingProxies) {
             const container = document.getElementById('workingProxiesList');
-            container.innerHTML = '';
             
-            workingProxies.forEach((proxy, index) => {
+            // Store current scroll position and detect if user is scrolling
+            const currentScrollTop = container.scrollTop;
+            const maxScroll = container.scrollHeight - container.clientHeight;
+            const isAtBottom = currentScrollTop >= maxScroll - 10; // 10px tolerance
+            
+            // Clear scroll timeout and set scrolling flag
+            clearTimeout(scrollTimeout);
+            isUserScrolling = true;
+            
+            // Get existing proxy links to avoid duplicates and flickering
+            const existingProxies = new Set();
+            const existingElements = container.querySelectorAll('.proxy-item');
+            existingElements.forEach(element => {
+                const link = element.querySelector('.proxy-link').textContent;
+                existingProxies.add(link);
+            });
+            
+            // Only add new proxies to prevent flickering
+            const newProxies = workingProxies.filter(proxy => !existingProxies.has(proxy.proxy_link));
+            
+            // Add new proxy elements
+            newProxies.forEach((proxy, index) => {
                 const div = document.createElement('div');
                 div.className = 'proxy-item proxy-working';
+                
+                // Create a unique ID for each proxy to avoid conflicts
+                const proxyId = 'proxy_' + Date.now() + '_' + index;
+                
                 div.innerHTML = `
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span class="text-truncate">${proxy.proxy_link}</span>
-                        <span class="badge bg-success">${proxy.response_code}</span>
+                    <div class="proxy-link">${escapeHtml(proxy.proxy_link)}</div>
+                    <div class="proxy-actions">
+                        <span class="badge bg-success proxy-status">${proxy.response_code}</span>
+                        <button class="btn-proxy-action btn-view" data-proxy-id="${proxyId}">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn-proxy-action btn-copy" onclick="copyProxyLink('${escapeHtml(proxy.proxy_link)}')">
+                            <i class="fas fa-copy"></i>
+                        </button>
                     </div>
                 `;
                 
-                // Add tooltip with response details
-                div.setAttribute('data-bs-toggle', 'tooltip');
-                div.setAttribute('data-bs-placement', 'top');
-                div.setAttribute('title', `Response: ${proxy.response_text}`);
+                // Store proxy data as a property of the element for easy access
+                div.proxyData = proxy;
                 
                 container.appendChild(div);
                 
-                // Initialize tooltip
-                new bootstrap.Tooltip(div);
+                // Add event listener for the view button
+                const viewBtn = div.querySelector('.btn-view');
+                viewBtn.addEventListener('click', function() {
+                    showResponseDetails(proxy);
+                });
             });
+            
+            // Reset scrolling flag after a delay
+            scrollTimeout = setTimeout(() => {
+                isUserScrolling = false;
+                
+                // Auto-scroll to bottom only if user was already at bottom
+                if (isAtBottom && newProxies.length > 0) {
+                    container.scrollTop = container.scrollHeight;
+                }
+            }, 100);
         }
 
-        // Copy working proxies
-        function copyWorkingProxies() {
-            if (!currentSessionId) {
-                showNotification('No active session', 'warning');
+        // Helper function to escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Show response details in modal - now accepts proxy object directly
+        function showResponseDetails(proxy) {
+            try {
+                // Ensure we have a valid proxy object
+                if (!proxy || typeof proxy !== 'object') {
+                    throw new Error('Invalid proxy data');
+                }
+                
+                document.getElementById('modalProxyLink').textContent = proxy.proxy_link || 'N/A';
+                document.getElementById('modalResponseStatus').textContent = proxy.response_code || 'N/A';
+                document.getElementById('modalTestUrl').textContent = proxy.test_url || 'N/A';
+                document.getElementById('modalResponseBody').textContent = proxy.response_text || 'No response body';
+                document.getElementById('modalAttempt').textContent = `${proxy.attempt || 1}`;
+                document.getElementById('modalTestTime').textContent = `${(proxy.test_time || 0).toFixed(2)}s`;
+                
+                // Update modal background colors for dark mode
+                const modalElements = document.querySelectorAll('#responseModal .bg-light');
+                const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+                modalElements.forEach(el => {
+                    if (isDark) {
+                        el.classList.remove('bg-light');
+                        el.classList.add('bg-dark', 'text-light');
+                    } else {
+                        el.classList.remove('bg-dark', 'text-light');
+                        el.classList.add('bg-light');
+                    }
+                });
+                
+                // Set up copy button for modal
+                document.getElementById('modalCopyBtn').onclick = function() {
+                    copyProxyLink(proxy.proxy_link);
+                };
+                
+                // Show modal
+                const modal = new bootstrap.Modal(document.getElementById('responseModal'));
+                modal.show();
+                
+            } catch (error) {
+                console.error('Error showing response details:', error);
+                showNotification('Error displaying response details: ' + error.message, 'danger');
+            }
+        }
+
+        // Copy individual proxy link
+        function copyProxyLink(proxyLink) {
+            if (!proxyLink) {
+                showNotification('No proxy link to copy', 'warning');
                 return;
             }
             
-            fetch(`/get_status/${currentSessionId}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.working_proxy_list && data.working_proxy_list.length > 0) {
-                    const proxyLinks = data.working_proxy_list.map(proxy => proxy.proxy_link).join('\n');
-                    
-                    navigator.clipboard.writeText(proxyLinks).then(() => {
-                        showNotification(`Copied ${data.working_proxy_list.length} working proxies to clipboard`, 'success');
-                    }).catch(err => {
-                        console.error('Failed to copy to clipboard:', err);
-                        // Fallback: create text area and select
-                        const textArea = document.createElement('textarea');
-                        textArea.value = proxyLinks;
-                        document.body.appendChild(textArea);
-                        textArea.select();
-                        document.execCommand('copy');
-                        document.body.removeChild(textArea);
-                        showNotification('Copied to clipboard', 'success');
-                    });
-                } else {
-                    showNotification('No working proxies to copy', 'warning');
+            navigator.clipboard.writeText(proxyLink).then(() => {
+                showNotification('Proxy link copied to clipboard', 'success');
+            }).catch(err => {
+                console.error('Failed to copy to clipboard:', err);
+                // Fallback method
+                const textArea = document.createElement('textarea');
+                textArea.value = proxyLink;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                textArea.style.top = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showNotification('Proxy link copied to clipboard', 'success');
+                } catch (err) {
+                    showNotification('Failed to copy proxy link', 'danger');
                 }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showNotification('Error copying proxies: ' + error.message, 'danger');
+                document.body.removeChild(textArea);
             });
         }
 
         // Download results
-        function downloadResults() {
+        function downloadResults(format = 'json') {
             if (!currentSessionId) {
                 showNotification('No active session', 'warning');
                 return;
             }
             
-            window.location.href = `/download_results/${currentSessionId}`;
+            window.location.href = `/download_results/${currentSessionId}/${format}`;
         }
 
         // Show notification

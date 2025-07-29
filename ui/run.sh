@@ -15,7 +15,7 @@ fi
 
 # Install required packages
 echo "Installing required packages..."
-pip3 install flask flask-socketio requests
+pip3 install flask flask-socketio requests psutil
 
 # Create necessary directories
 mkdir -p results logs uploads

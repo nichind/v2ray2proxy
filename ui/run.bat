@@ -17,7 +17,7 @@ if %errorlevel% neq 0 (
 
 REM Install required packages
 echo Installing required packages...
-pip install flask flask-socketio requests
+pip install flask flask-socketio requests psutil
 
 REM Create necessary directories
 if not exist "results" mkdir results
