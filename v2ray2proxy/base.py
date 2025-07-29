@@ -530,7 +530,7 @@ class V2RayProxy:
             )
 
             # Wait a brief moment to see if process terminates immediately
-            time.sleep(0.5)
+            time.sleep(0.05)
 
             # Check if v2ray is still running
             if self.v2ray_process.poll() is not None:
