@@ -67,7 +67,7 @@ class V2RayCore:
     """Represents executable of V2Ray core."""
 
     def __init__(self):
-        self.release_tag_url = os.environ.get("V2RAY_RELASE_TAG_URL") or "https://github.com/v2fly/v2ray-core/releases/download/v4.45.2"
+        self.release_tag_url = os.environ.get("V2RAY_RELASE_TAG_URL") or "https://github.com/v2fly/v2ray-core/releases/download/v5.37.0"
         if os.environ.get("V2RAY_EXECUTABLE_DIR"):
             self.executable_dir = os.environ["V2RAY_EXECUTABLE_DIR"]
             self.executable = os.path.join(self.executable_dir, "v2ray.exe" if os.name == "nt" else "v2ray")
@@ -81,7 +81,7 @@ class V2RayCore:
 
     def _download_executables(self):
         """Download and set up V2Ray executables for the current platform."""
-        import platform
+        import platform 
         import zipfile
         import urllib.request
         import stat
@@ -94,19 +94,13 @@ class V2RayCore:
 
         # Determine the executable name based on OS
         system = platform.system().lower()
-        if system == "windows":
-            executable_name = "v2ray.exe"
-            ctl_name = "v2ctl.exe"
-        else:
-            executable_name = "v2ray"
-            ctl_name = "v2ctl"
-
+        executable_name = "v2ray"
+        
         # Check if the executable and v2ctl already exist
-        v2ray_executable = v2ray_dir / executable_name
-        v2ctl_executable = v2ray_dir / ctl_name
+        v2ray_executable = v2ray_dir / (executable_name + (".exe" if system == "windows" else ""))
 
-        if v2ray_executable.exists() and v2ctl_executable.exists():
-            logging.info(f"V2Ray executables already exist at {v2ray_dir}")
+        if v2ray_executable.exists():
+            logging.info(f"V2Ray executables found at {v2ray_dir}")
             return str(v2ray_dir)
 
         # Determine the current OS and architecture
@@ -212,13 +206,10 @@ class V2RayCore:
             # Verify main executables exist
             if not v2ray_executable.exists():
                 raise RuntimeError(f"Could not find {executable_name} in the extracted files")
-
-            if not v2ctl_executable.exists():
-                logging.warning(f"Could not find {ctl_name} in the extracted files, V2Ray may not function correctly")
-
+            
             # Make the files executable on Unix systems
             if system != "windows":
-                for exe in [v2ray_executable, v2ctl_executable]:
+                for exe in [v2ray_executable]:
                     if exe.exists():
                         exe.chmod(exe.stat().st_mode | stat.S_IEXEC)
 
@@ -554,7 +545,8 @@ class V2RayProxy:
             config_path = self.create_config_file()
 
             # Verify executable exists and is accessible
-            v2ray_exe = V2RayCore().executable
+            core = V2RayCore()
+            v2ray_exe = core.executable
             if not os.path.isfile(v2ray_exe):
                 raise FileNotFoundError(f"V2Ray executable not found at {v2ray_exe}")
 
@@ -563,6 +555,16 @@ class V2RayProxy:
 
             # Prepare command and environment
             cmd = [v2ray_exe, "-config", config_path]
+            
+            # Perform a quick check to find out the version of v2ray core
+            files = os.listdir(core.executable_dir)
+            if "v2ctl" in files or "v2ctl.exe" in files:
+                logging.info(f"Detected v2ctl in {core.executable_dir}, assuming v2ray core is <v5.0")
+            else:
+                # If v2ctl is not found, assume v2ray core is >=v5.0
+                # Insert "run" command for compatibility
+                cmd.insert(1, "run")
+            
             logging.info(f"Starting V2Ray with command: {' '.join(cmd)}")
 
             # Set up process creation flags for better process management
