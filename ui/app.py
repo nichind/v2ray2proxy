@@ -126,7 +126,7 @@ class ProxyTestSession:
             "elapsed_time": round(elapsed, 2),
             "eta": round(self.cached_eta, 0),
             "is_running": not self.stop_requested,
-            "working_proxy_list": self.working_proxies.copy() if len(self.working_proxies) < 100 else self.working_proxies[-100:],
+            "working_proxy_list": self.working_proxies.copy() if len(self.working_proxies) < 1000 else self.working_proxies[-1000:],
             "resource_usage": self.resource_usage_data,
             "results_filename": self.results_filename,
         }

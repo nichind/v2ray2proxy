@@ -67,7 +67,7 @@ class V2RayCore:
     """Represents executable of V2Ray core."""
 
     def __init__(self):
-        self.release_tag_url = os.environ.get("V2RAY_RELASE_TAG_URL") or "https://github.com/v2fly/v2ray-core/releases/download/v5.37.0"
+        self.release_tag_url = os.environ.get("V2RAY_RELASE_TAG_URL") or "https://github.com/v2fly/v2ray-core/releases/download/v5.38.0"
         if os.environ.get("V2RAY_EXECUTABLE_DIR"):
             self.executable_dir = os.environ["V2RAY_EXECUTABLE_DIR"]
             self.executable = os.path.join(self.executable_dir, "v2ray.exe" if os.name == "nt" else "v2ray")
