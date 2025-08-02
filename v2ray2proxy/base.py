@@ -8,6 +8,8 @@ import atexit
 import logging
 import base64
 import urllib.parse
+import urllib.request
+import urllib.error
 import socket
 import signal
 import threading
@@ -26,23 +28,23 @@ def _register_signal_handlers():
     global _signal_handlers_registered
     if _signal_handlers_registered:
         return
-    
+
     def cleanup_handler(signum, frame):
         logging.info(f"Received signal {signum}, cleaning up V2Ray processes...")
         _cleanup_all_processes()
         # Re-raise the signal for default handling
         signal.signal(signum, signal.SIG_DFL)
         os.kill(os.getpid(), signum)
-    
+
     # Register handlers for common termination signals
-    if os.name != 'nt':  # Unix-like systems
+    if os.name != "nt":  # Unix-like systems
         signal.signal(signal.SIGTERM, cleanup_handler)
         signal.signal(signal.SIGINT, cleanup_handler)
         signal.signal(signal.SIGHUP, cleanup_handler)
     else:  # Windows
         signal.signal(signal.SIGTERM, cleanup_handler)
         signal.signal(signal.SIGINT, cleanup_handler)
-    
+
     _signal_handlers_registered = True
 
 
@@ -52,7 +54,7 @@ def _cleanup_all_processes():
         processes_to_cleanup = list(_active_processes)
         for process_ref in processes_to_cleanup:
             try:
-                if hasattr(process_ref, '_emergency_cleanup'):
+                if hasattr(process_ref, "_emergency_cleanup"):
                     process_ref._emergency_cleanup()
             except Exception as e:
                 logging.error(f"Error in emergency cleanup: {e}")
@@ -81,7 +83,7 @@ class V2RayCore:
 
     def _download_executables(self):
         """Download and set up V2Ray executables for the current platform."""
-        import platform 
+        import platform
         import zipfile
         import urllib.request
         import stat
@@ -95,7 +97,7 @@ class V2RayCore:
         # Determine the executable name based on OS
         system = platform.system().lower()
         executable_name = "v2ray"
-        
+
         # Check if the executable and v2ctl already exist
         v2ray_executable = v2ray_dir / (executable_name + (".exe" if system == "windows" else ""))
 
@@ -206,7 +208,7 @@ class V2RayCore:
             # Verify main executables exist
             if not v2ray_executable.exists():
                 raise RuntimeError(f"Could not find {executable_name} in the extracted files")
-            
+
             # Make the files executable on Unix systems
             if system != "windows":
                 for exe in [v2ray_executable]:
@@ -242,7 +244,7 @@ class V2RayProxy:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                s.bind(('localhost', port))
+                s.bind(("localhost", port))
                 return False
         except (socket.error, OSError):
             return True
@@ -251,19 +253,19 @@ class V2RayProxy:
         # Try to get a system-assigned port first
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind(('localhost', 0))  # Let OS choose a free port
+                s.bind(("localhost", 0))  # Let OS choose a free port
                 _, port = s.getsockname()
                 if port != exclude_port:
                     return port
         except Exception as e:
             logging.warning(f"Failed to get system-assigned port: {str(e)}")
-            
+
         # If that fails, try a few random ports
         for _ in range(100):
             port = random.randint(10000, 65000)
             if port != exclude_port and not self._is_port_in_use(port):
                 return port
-                
+
         raise RuntimeError("Could not find an unused port")
 
     def _parse_vmess_link(self, link: str) -> dict:
@@ -555,7 +557,7 @@ class V2RayProxy:
 
             # Prepare command and environment
             cmd = [v2ray_exe, "-config", config_path]
-            
+
             # Perform a quick check to find out the version of v2ray core
             files = os.listdir(core.executable_dir)
             if "v2ctl" in files or "v2ctl.exe" in files:
@@ -564,21 +566,21 @@ class V2RayProxy:
                 # If v2ctl is not found, assume v2ray core is >=v5.0
                 # Insert "run" command for compatibility
                 cmd.insert(1, "run")
-            
+
             logging.info(f"Starting V2Ray with command: {' '.join(cmd)}")
 
             # Set up process creation flags for better process management
             kwargs = {
-                'stdout': subprocess.PIPE,
-                'stderr': subprocess.PIPE,
-                'universal_newlines': True,
+                "stdout": subprocess.PIPE,
+                "stderr": subprocess.PIPE,
+                "universal_newlines": True,
             }
 
-            if os.name == 'nt':  # Windows
-                kwargs['shell'] = True
-                kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
+            if os.name == "nt":  # Windows
+                kwargs["shell"] = True
+                kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
             else:  # Unix-like systems
-                kwargs['preexec_fn'] = os.setsid  # Create new process group
+                kwargs["preexec_fn"] = os.setsid  # Create new process group
 
             # Start v2ray process
             self.v2ray_process = subprocess.Popen(cmd, **kwargs)
@@ -671,10 +673,10 @@ class V2RayProxy:
     def _terminate_process(self, timeout=2) -> bool:
         """
         Fast and reliable process termination with cross-platform support.
-        
+
         Args:
             timeout (int): Maximum time to wait for graceful termination
-            
+
         Returns:
             bool: True if process was terminated successfully
         """
@@ -690,9 +692,9 @@ class V2RayProxy:
             pid = self.v2ray_process.pid
             logging.debug(f"Terminating V2Ray process (PID: {pid})")
 
-            if os.name == 'nt':  # Windows
+            if os.name == "nt":  # Windows
                 return self._terminate_windows_process(pid, timeout)
-            else:  # Unix-like systems  
+            else:  # Unix-like systems
                 return self._terminate_unix_process(pid, timeout)
 
         except Exception as e:
@@ -706,17 +708,17 @@ class V2RayProxy:
             try:
                 parent = psutil.Process(pid)
                 children = parent.children(recursive=True)
-                
+
                 # Terminate children first
                 for child in children:
                     try:
                         child.terminate()
                     except psutil.NoSuchProcess:
                         pass
-                
+
                 # Terminate parent
                 parent.terminate()
-                
+
                 # Wait for termination
                 try:
                     parent.wait(timeout=timeout)
@@ -734,24 +736,23 @@ class V2RayProxy:
                     parent.wait(timeout=1)
                     self._process_terminated.set()
                     return True
-                    
+
             except psutil.NoSuchProcess:
                 # Process already terminated
                 self._process_terminated.set()
                 return True
-                
+
         except ImportError:
             # Fallback to subprocess if psutil not available
             try:
-                subprocess.run(['taskkill', '/F', '/T', '/PID', str(pid)], 
-                             check=False, capture_output=True, timeout=timeout)
+                subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], check=False, capture_output=True, timeout=timeout)
                 time.sleep(0.1)
                 if self.v2ray_process.poll() is not None:
                     self._process_terminated.set()
                     return True
             except (subprocess.TimeoutExpired, FileNotFoundError):
                 pass
-            
+
             # Final fallback
             try:
                 self.v2ray_process.terminate()
@@ -771,7 +772,7 @@ class V2RayProxy:
             try:
                 parent = psutil.Process(pid)
                 children = parent.children(recursive=True)
-                
+
                 # Send SIGTERM to all processes
                 for child in children:
                     try:
@@ -779,7 +780,7 @@ class V2RayProxy:
                     except psutil.NoSuchProcess:
                         pass
                 parent.terminate()
-                
+
                 # Wait for graceful termination
                 try:
                     parent.wait(timeout=timeout)
@@ -797,21 +798,21 @@ class V2RayProxy:
                     parent.wait(timeout=1)
                     self._process_terminated.set()
                     return True
-                    
+
             except psutil.NoSuchProcess:
                 # Process already terminated
                 self._process_terminated.set()
                 return True
-                
+
         except ImportError:
             # Fallback without psutil
             try:
                 # Create process group to manage child processes
-                if hasattr(os, 'killpg'):
+                if hasattr(os, "killpg"):
                     try:
                         # Try to kill the entire process group
                         os.killpg(os.getpgid(pid), signal.SIGTERM)
-                        
+
                         # Wait for termination
                         start_time = time.time()
                         while time.time() - start_time < timeout:
@@ -819,17 +820,17 @@ class V2RayProxy:
                                 self._process_terminated.set()
                                 return True
                             time.sleep(0.05)
-                        
+
                         # Force kill if timeout
                         os.killpg(os.getpgid(pid), signal.SIGKILL)
                         self.v2ray_process.wait(timeout=1)
                         self._process_terminated.set()
                         return True
-                        
+
                     except (ProcessLookupError, OSError):
                         # Process group doesn't exist, try individual process
                         pass
-                
+
                 # Fallback to individual process termination
                 self.v2ray_process.terminate()
                 try:
@@ -841,7 +842,7 @@ class V2RayProxy:
                     self.v2ray_process.wait(timeout=1)
                     self._process_terminated.set()
                     return True
-                    
+
             except (ProcessLookupError, OSError):
                 # Process already terminated
                 self._process_terminated.set()
@@ -851,24 +852,25 @@ class V2RayProxy:
         """Emergency cleanup called by signal handler."""
         try:
             if self.v2ray_process and self.v2ray_process.poll() is None:
-                if os.name == 'nt':
+                if os.name == "nt":
                     # Windows - force kill immediately
                     try:
-                        subprocess.run(['taskkill', '/F', '/T', '/PID', str(self.v2ray_process.pid)], 
-                                     check=False, capture_output=True, timeout=1)
-                    except:
+                        subprocess.run(
+                            ["taskkill", "/F", "/T", "/PID", str(self.v2ray_process.pid)], check=False, capture_output=True, timeout=1
+                        )
+                    except Exception:
                         try:
                             self.v2ray_process.kill()
-                        except:
+                        except Exception:
                             pass
                 else:
                     # Unix - force kill process group
                     try:
                         os.killpg(os.getpgid(self.v2ray_process.pid), signal.SIGKILL)
-                    except:
+                    except Exception:
                         try:
                             self.v2ray_process.kill()
-                        except:
+                        except Exception:
                             pass
         except Exception:
             pass  # Suppress all exceptions in emergency cleanup
@@ -1034,7 +1036,7 @@ class V2RayPool:
     def stop_all(self):
         """Stop all proxies in the pool."""
         errors = []
-        
+
         # Use threading to stop proxies in parallel for speed
         def stop_proxy_thread(proxy_id):
             try:
@@ -1156,27 +1158,28 @@ class V2RayPool:
         Returns:
             dict: Map of proxy ID to latency in seconds. Failed proxies are not included.
         """
-        import requests
-        from requests.exceptions import RequestException
-
         latencies = {}
 
         for proxy_id in self.active_proxies:
             proxy = self.proxies[proxy_id]
-            proxies = {"http": proxy.http_proxy_url, "https": proxy.http_proxy_url}
+
+            # Set up proxy handler
+            proxy_handler = urllib.request.ProxyHandler({"http": proxy.http_proxy_url, "https": proxy.http_proxy_url})
+            opener = urllib.request.build_opener(proxy_handler)
 
             try:
                 start_time = time.time()
-                response = requests.get(target, proxies=proxies, timeout=timeout)
+                with opener.open(target, timeout=timeout) as response:
+                    # Read a small amount of data to ensure connection works
+                    response.read(1024)
                 end_time = time.time()
 
-                if response.status_code == 200:
-                    latency = end_time - start_time
-                    latencies[proxy_id] = latency
-                    # Update proxy's last known latency
-                    proxy.last_latency = latency
-                    proxy.last_check_time = end_time
-            except RequestException as e:
+                latency = end_time - start_time
+                latencies[proxy_id] = latency
+                # Update proxy's last known latency
+                proxy.last_latency = latency
+                proxy.last_check_time = end_time
+            except (urllib.error.URLError, urllib.error.HTTPError, socket.timeout) as e:
                 logging.warning(f"Failed to measure latency for proxy {proxy_id}: {str(e)}")
                 # Mark as failed for monitoring purposes
                 proxy.last_error = str(e)
@@ -1195,25 +1198,25 @@ class V2RayPool:
         Returns:
             dict: Map of proxy ID to health status (True/False).
         """
-        import requests
-        from requests.exceptions import RequestException
-
         health = {}
 
         for proxy_id in self.active_proxies:
             proxy = self.proxies[proxy_id]
-            proxies = {"http": proxy.http_proxy_url, "https": proxy.http_proxy_url}
+
+            # Set up proxy handler
+            proxy_handler = urllib.request.ProxyHandler({"http": proxy.http_proxy_url, "https": proxy.http_proxy_url})
+            opener = urllib.request.build_opener(proxy_handler)
 
             try:
-                response = requests.get(target, proxies=proxies, timeout=timeout)
-                health[proxy_id] = response.status_code == 200
+                with opener.open(target, timeout=timeout) as response:
+                    health[proxy_id] = response.code == 200
 
                 # Clear any previous error state if successful
                 if health[proxy_id]:
                     proxy.last_error = None
                     proxy.last_error_time = None
                     proxy.last_check_time = time.time()
-            except RequestException as e:
+            except (urllib.error.URLError, urllib.error.HTTPError, socket.timeout) as e:
                 health[proxy_id] = False
                 # Update error state
                 proxy.last_error = str(e)
@@ -1333,7 +1336,7 @@ class V2RayPool:
 
         # Determine which proxies to test
         active_ids = list(self.active_proxies)
-        
+
         if count is not None and count > 0:
             # Test only a subset of proxies (randomly selected)
             test_count = min(count, len(active_ids))
@@ -1344,23 +1347,27 @@ class V2RayPool:
 
         # Measure latencies for selected proxies
         latencies = {}
+
         for proxy_id in test_ids:
             proxy = self.proxies[proxy_id]
-            proxies = {"http": proxy.http_proxy_url, "https": proxy.http_proxy_url}
+
+            # Set up proxy handler
+            proxy_handler = urllib.request.ProxyHandler({"http": proxy.http_proxy_url, "https": proxy.http_proxy_url})
+            opener = urllib.request.build_opener(proxy_handler)
 
             try:
-                import requests
                 start_time = time.time()
-                response = requests.get("https://www.google.com", proxies=proxies, timeout=timeout)
+                with opener.open("https://www.google.com", timeout=timeout) as response:
+                    # Read a small amount of data to ensure connection works
+                    response.read(1024)
                 end_time = time.time()
 
-                if response.status_code == 200:
-                    latency = end_time - start_time
-                    latencies[proxy_id] = latency
-                    # Update proxy's last known latency
-                    proxy.last_latency = latency
-                    proxy.last_check_time = end_time
-            except Exception as e:
+                latency = end_time - start_time
+                latencies[proxy_id] = latency
+                # Update proxy's last known latency
+                proxy.last_latency = latency
+                proxy.last_check_time = end_time
+            except (urllib.error.URLError, urllib.error.HTTPError, socket.timeout) as e:
                 logging.warning(f"Failed to measure latency for proxy {proxy_id}: {str(e)}")
                 # Mark as failed for monitoring purposes
                 proxy.last_error = str(e)
@@ -1371,7 +1378,7 @@ class V2RayPool:
             fastest_id = min(latencies, key=latencies.get)
             logging.info(f"Fastest proxy is {fastest_id} with latency {latencies[fastest_id]:.3f}s")
             return self.proxies[fastest_id]
-        
+
         return None
 
     def stop(self):

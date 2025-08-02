@@ -63,25 +63,20 @@ class ProxyTestSession:
         self.tested_proxies = 0
         self.working_proxies = []
         self.failed_proxies = []
-        
+
         # Performance tracking
         self.test_times = []
         self.last_update_time = time.time()
         self.last_eta_update = time.time()
         self.cached_eta = 0
-        
+
         # File paths for real-time saving
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.results_filename = f"proxy_test_results_{timestamp}_{session_id[:8]}.json"
         self.results_filepath = RESULTS_DIR / self.results_filename
-        
+
         # Resource usage tracking
-        self.resource_usage_data = {
-            "process_count": 0,
-            "v2ray_processes": 0,
-            "memory_mb": 0,
-            "cpu_percent": 0
-        }
+        self.resource_usage_data = {"process_count": 0, "v2ray_processes": 0, "memory_mb": 0, "cpu_percent": 0}
         self.resource_update_thread = None
         self.resource_update_running = False
 
@@ -90,19 +85,19 @@ class ProxyTestSession:
         self.active_v2ray_instances = set()
         self.cleanup_lock = threading.Lock()
         self.results_lock = threading.Lock()
-        
+
         # Initialize results file
         self._save_current_results()
 
     def get_status(self):
         elapsed = time.time() - self.start_time
-        
+
         with self.results_lock:
             tested = self.tested_proxies
             working = len(self.working_proxies)
             failed = len(self.failed_proxies)
             progress = (tested / self.total_proxies * 100) if self.total_proxies > 0 else 0
-        
+
         # Calculate ETA only every 5 seconds to reduce flickering
         current_time = time.time()
         if (current_time - self.last_eta_update) >= 5.0 and tested > 0:
@@ -115,7 +110,7 @@ class ProxyTestSession:
             else:
                 self.cached_eta = 0
             self.last_eta_update = current_time
-        
+
         return {
             "session_id": self.session_id,
             "total_proxies": self.total_proxies,
@@ -130,7 +125,7 @@ class ProxyTestSession:
             "resource_usage": self.resource_usage_data,
             "results_filename": self.results_filename,
         }
-    
+
     def _save_current_results(self):
         """Save current results to file in real-time"""
         try:
@@ -152,87 +147,87 @@ class ProxyTestSession:
                         "tested_proxies": self.tested_proxies,
                         "working_count": len(self.working_proxies),
                         "failed_count": len(self.failed_proxies),
-                        "success_rate": round((len(self.working_proxies) / max(self.tested_proxies, 1)) * 100, 2)
-                    }
+                        "success_rate": round((len(self.working_proxies) / max(self.tested_proxies, 1)) * 100, 2),
+                    },
                 }
 
-            with open(self.results_filepath, "w", encoding='utf-8') as f:
+            with open(self.results_filepath, "w", encoding="utf-8") as f:
                 json.dump(results, f, indent=2, ensure_ascii=False)
-                
+
         except Exception as e:
             logging.error(f"Error saving results to file: {e}")
 
     def update_resource_usage(self):
         """Continuously monitor and update resource usage in a separate thread"""
         self.resource_update_running = True
-        
+
         while self.resource_update_running and not self.stop_requested:
             try:
                 # Count active instances
                 with self.cleanup_lock:
                     process_count = len(self.active_v2ray_instances)
-                
+
                 # Get all v2ray processes
                 v2ray_processes = []
                 total_memory_mb = 0
                 total_cpu_percent = 0
-                
-                for proc in psutil.process_iter(['pid', 'name', 'memory_info']):
+
+                for proc in psutil.process_iter(["pid", "name", "memory_info"]):
                     try:
-                        if proc.info['name'] and 'v2ray' in proc.info['name'].lower():
+                        if proc.info["name"] and "v2ray" in proc.info["name"].lower():
                             v2ray_processes.append(proc)
                     except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                         pass
-                
+
                 # First CPU measurement to initialize
                 for proc in v2ray_processes:
                     try:
                         proc.cpu_percent(interval=None)
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
                         pass
-                
+
                 # Wait for a moment to get accurate CPU readings
                 time.sleep(0.5)
-                
+
                 # Get actual measurements
                 for proc in v2ray_processes:
                     try:
                         cpu_percent = proc.cpu_percent(interval=None)
                         memory_mb = proc.memory_info().rss / (1024 * 1024)
-                        
+
                         total_cpu_percent += cpu_percent
                         total_memory_mb += memory_mb
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
                         pass
-                
+
                 # Update the resource usage data
                 self.resource_usage_data = {
                     "process_count": process_count,
                     "v2ray_processes": len(v2ray_processes),
                     "memory_mb": round(total_memory_mb, 2),
-                    "cpu_percent": round(total_cpu_percent, 2)
+                    "cpu_percent": round(total_cpu_percent, 2),
                 }
-                
+
                 # Sleep before next update
                 time.sleep(1.0)
-                
+
             except Exception as e:
                 logging.error(f"Error updating resource usage: {e}")
                 time.sleep(2.0)  # Longer delay if error
-        
+
         logging.info("Resource usage monitoring stopped")
 
     def stop(self):
         self.stop_requested = True
         self.resource_update_running = False
-        
+
         if self.executor:
             self.executor.shutdown(wait=False)
-        
+
         # Stop resource monitoring thread
         if self.resource_update_thread and self.resource_update_thread.is_alive():
             self.resource_update_thread.join(timeout=2.0)
-            
+
         self.cleanup_all_instances()
 
     def cleanup_all_instances(self):
@@ -240,7 +235,7 @@ class ProxyTestSession:
         with self.cleanup_lock:
             instances_to_cleanup = list(self.active_v2ray_instances)
             self.active_v2ray_instances.clear()
-        
+
         for proxy_instance in instances_to_cleanup:
             try:
                 proxy_instance.stop()
@@ -255,7 +250,7 @@ class ProxyTestSession:
 
         proxy_instance = None
         start_time = time.time()
-        
+
         try:
             # Create V2Ray instance
             proxy_instance = V2RayProxy(proxy_link, config_only=False)
@@ -281,18 +276,18 @@ class ProxyTestSession:
                             "response_code": response.status_code,
                             "attempt": attempt + 1,
                             "test_url": self.test_url,
-                            "test_time": time.time() - start_time
+                            "test_time": time.time() - start_time,
                         }
-                        
+
                         with self.results_lock:
                             self.working_proxies.append(result)
                             self.tested_proxies += 1
                             self.test_times.append(time.time() - start_time)
-                        
+
                         # Save results in real-time every 10 working proxies
                         if len(self.working_proxies) % 10 == 0:
                             self._save_current_results()
-                        
+
                         return result
 
                 except Exception as e:
@@ -303,14 +298,14 @@ class ProxyTestSession:
                             "error": str(e),
                             "attempt": attempt + 1,
                             "test_url": self.test_url,
-                            "test_time": time.time() - start_time
+                            "test_time": time.time() - start_time,
                         }
-                        
+
                         with self.results_lock:
                             self.failed_proxies.append(result)
                             self.tested_proxies += 1
                             self.test_times.append(time.time() - start_time)
-                        
+
                         return result
 
                     # Wait before retry
@@ -322,31 +317,31 @@ class ProxyTestSession:
                 "status": "failed",
                 "error": "All retries failed",
                 "test_url": self.test_url,
-                "test_time": time.time() - start_time
+                "test_time": time.time() - start_time,
             }
-            
+
             with self.results_lock:
                 self.failed_proxies.append(result)
                 self.tested_proxies += 1
                 self.test_times.append(time.time() - start_time)
-            
+
             return result
 
         except Exception as e:
             logging.error(f"Error testing proxy: {e}")
             result = {
-                "proxy_link": proxy_link, 
-                "status": "failed", 
-                "error": str(e), 
+                "proxy_link": proxy_link,
+                "status": "failed",
+                "error": str(e),
                 "test_url": self.test_url,
-                "test_time": time.time() - start_time
+                "test_time": time.time() - start_time,
             }
-            
+
             with self.results_lock:
                 self.failed_proxies.append(result)
                 self.tested_proxies += 1
                 self.test_times.append(time.time() - start_time)
-            
+
             return result
 
         finally:
@@ -367,45 +362,45 @@ class ProxyTestSession:
             self.resource_update_thread = threading.Thread(target=self.update_resource_usage)
             self.resource_update_thread.daemon = True
             self.resource_update_thread.start()
-            
+
             # Create a proxy counter for batch updates
             completed_count = 0
             last_update_time = time.time()
             last_save_time = time.time()
-            
+
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_threads) as executor:
                 self.executor = executor
-                
+
                 # Submit all proxy tests
                 future_to_proxy = {executor.submit(self.test_single_proxy, proxy): proxy for proxy in self.proxies}
-                
+
                 # Process results as they complete
                 for future in concurrent.futures.as_completed(future_to_proxy):
                     if self.stop_requested:
                         break
-                    
+
                     try:
                         future.result()  # Result already handled in test_single_proxy
-                        
+
                         # Update UI periodically to avoid excessive updates
                         completed_count += 1
                         current_time = time.time()
-                        
+
                         # Save results every 30 seconds or every 100 proxies
                         if (current_time - last_save_time) > 30.0 or completed_count % 100 == 0:
                             last_save_time = current_time
                             self._save_current_results()
-                        
+
                         # Only update UI every 5 proxies or every 3 seconds
                         if completed_count % 5 == 0 or (current_time - last_update_time) > 3.0:
                             last_update_time = current_time
                             status = self.get_status()
                             socketio.emit("progress_update", status, room=self.session_id)
-                            
+
                             # Log updates periodically
                             if completed_count % 50 == 0:
                                 logging.info(f"Progress: {status['progress']}% - {status['tested_proxies']}/{status['total_proxies']}")
-                    
+
                     except Exception as e:
                         logging.error(f"Error processing proxy result: {e}")
 
@@ -413,15 +408,17 @@ class ProxyTestSession:
             self.resource_update_running = False
             if self.resource_update_thread.is_alive():
                 self.resource_update_thread.join(timeout=2.0)
-                
+
             # Save final results
             self._save_current_results()
-            
+
             # Final status update and completion notification
             final_status = self.get_status()
             socketio.emit("progress_update", final_status, room=self.session_id)
             socketio.emit("test_complete", final_status, room=self.session_id)
-            logging.info(f"Test complete: {final_status['tested_proxies']}/{final_status['total_proxies']} proxies tested, {len(self.working_proxies)} working")
+            logging.info(
+                f"Test complete: {final_status['tested_proxies']}/{final_status['total_proxies']} proxies tested, {len(self.working_proxies)} working"
+            )
 
         except Exception as e:
             logging.error(f"Error in run_test: {e}")
@@ -529,12 +526,7 @@ def start_test():
         # Create test session
         session_id = str(uuid.uuid4())
         test_session = ProxyTestSession(
-            session_id=session_id, 
-            proxies=proxies, 
-            test_url=test_url, 
-            timeout=timeout, 
-            retries=retries, 
-            max_threads=max_threads
+            session_id=session_id, proxies=proxies, test_url=test_url, timeout=timeout, retries=retries, max_threads=max_threads
         )
 
         # Store session
@@ -592,24 +584,24 @@ def download_results(session_id, format_type):
                 return jsonify({"error": "Session not found"}), 404
 
             session = test_sessions[session_id]
-            
+
             if format_type == "json":
                 # Return the JSON file directly
                 if session.results_filepath.exists():
                     return send_file(
-                        session.results_filepath, 
-                        as_attachment=True, 
+                        session.results_filepath,
+                        as_attachment=True,
                         download_name=f"proxy_results_{session_id[:8]}.json",
-                        mimetype='application/json'
+                        mimetype="application/json",
                     )
                 else:
                     return jsonify({"error": "Results file not found"}), 404
-                    
+
             elif format_type == "txt":
                 # Create text file with working proxies only
                 with session.results_lock:
                     working_proxies = session.working_proxies.copy()
-                
+
                 content = f"# V2Ray Proxy Test Results - Working Proxies Only\n"
                 content += f"# Test URL: {session.test_url}\n"
                 content += f"# Total Proxies Tested: {session.tested_proxies}\n"
@@ -624,15 +616,10 @@ def download_results(session_id, format_type):
                 temp_filename = f"working_proxies_{session_id[:8]}.txt"
                 temp_filepath = RESULTS_DIR / temp_filename
 
-                with open(temp_filepath, "w", encoding='utf-8') as f:
+                with open(temp_filepath, "w", encoding="utf-8") as f:
                     f.write(content)
 
-                return send_file(
-                    temp_filepath, 
-                    as_attachment=True, 
-                    download_name=temp_filename,
-                    mimetype='text/plain'
-                )
+                return send_file(temp_filepath, as_attachment=True, download_name=temp_filename, mimetype="text/plain")
             else:
                 return jsonify({"error": "Invalid format type. Use 'json' or 'txt'"}), 400
 
@@ -653,19 +640,19 @@ def download_previous(filename, format_type=None):
         # If no format specified or format is json, return the original file
         if format_type is None or format_type == "json":
             return send_file(filepath, as_attachment=True)
-        
+
         elif format_type == "txt":
             # Load the JSON file and extract working proxies
             try:
-                with open(filepath, "r", encoding='utf-8') as f:
+                with open(filepath, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                
+
                 working_proxies = data.get("working_proxies", [])
                 test_url = data.get("test_url", "N/A")
                 total_proxies = data.get("total_proxies", 0)
                 tested_proxies = data.get("tested_proxies", 0)
                 start_time = data.get("start_time", time.time())
-                
+
                 # Create TXT content with working proxies only
                 content = f"# V2Ray Proxy Test Results - Working Proxies Only\n"
                 content += f"# Test URL: {test_url}\n"
@@ -686,22 +673,17 @@ def download_previous(filename, format_type=None):
                 temp_filename = f"{base_name}_working_proxies.txt"
                 temp_filepath = RESULTS_DIR / temp_filename
 
-                with open(temp_filepath, "w", encoding='utf-8') as f:
+                with open(temp_filepath, "w", encoding="utf-8") as f:
                     f.write(content)
 
-                return send_file(
-                    temp_filepath, 
-                    as_attachment=True, 
-                    download_name=temp_filename,
-                    mimetype='text/plain'
-                )
-                
+                return send_file(temp_filepath, as_attachment=True, download_name=temp_filename, mimetype="text/plain")
+
             except json.JSONDecodeError:
                 return jsonify({"error": "Invalid JSON file"}), 400
             except Exception as e:
                 logging.error(f"Error processing JSON file {filename}: {e}")
                 return jsonify({"error": f"Error processing file: {str(e)}"}), 500
-        
+
         else:
             return jsonify({"error": "Invalid format type. Use 'json' or 'txt'"}), 400
 
@@ -743,11 +725,11 @@ def handle_connect():
 @socketio.on("join")
 def on_join(data):
     """Join a specific room based on session ID"""
-    session_id = data.get('session_id')
+    session_id = data.get("session_id")
     if session_id:
         join_room(session_id)
         logging.info(f"Client joined room: {session_id}")
-        
+
         # Send current status if session exists
         with test_lock:
             if session_id in test_sessions:

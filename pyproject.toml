@@ -23,11 +23,15 @@ classifiers = [
 ]
 keywords = [
     "v2ray",
+    "v2core",
+    "v2ray-core",
     "proxy",
     "vless",
     "vmess",
     "shadowsocks",
     "trojan",
+    "python",
+    "cli"
 ]
 dependencies = ["psutil"]
 
