@@ -215,7 +215,7 @@ class V2RayCore:
                     if exe.exists():
                         exe.chmod(exe.stat().st_mode | stat.S_IEXEC)
 
-        logging.info(f"V2Ray installed at {v2ray_dir}")
+        logging.info(f"Using V2Ray executable at {v2ray_dir}")
         return str(v2ray_dir)
 
 
@@ -249,21 +249,25 @@ class V2RayProxy:
         except (socket.error, OSError):
             return True
 
-    def _pick_unused_port(self, exclude_port: int = None) -> int:
+    def _pick_unused_port(self, exclude_port: int | list = None) -> int:
         # Try to get a system-assigned port first
+        if not exclude_port:
+            exclude_port = []
+        elif isinstance(exclude_port, int):
+            exclude_port = [exclude_port]
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.bind(("localhost", 0))  # Let OS choose a free port
                 _, port = s.getsockname()
-                if port != exclude_port:
+                if port not in exclude_port:
                     return port
         except Exception as e:
             logging.warning(f"Failed to get system-assigned port: {str(e)}")
 
         # If that fails, try a few random ports
-        for _ in range(100):
+        for _ in range(25):
             port = random.randint(10000, 65000)
-            if port != exclude_port and not self._is_port_in_use(port):
+            if port not in exclude_port and not self._is_port_in_use(port):
                 return port
 
         raise RuntimeError("Could not find an unused port")
@@ -884,6 +888,33 @@ class V2RayProxy:
     def http_proxy_url(self):
         """Get the HTTP proxy URL."""
         return f"http://127.0.0.1:{self.http_port}"
+
+    @property
+    def usage_memory(self):
+        """Get the memory usage of the V2Ray process."""
+        if self.v2ray_process and self.v2ray_process.pid:
+            try:
+                process = psutil.Process(self.v2ray_process.pid)
+                return process.memory_info().rss
+            except Exception as exc:
+                logging.error(f"Error getting memory usage: {exc}")
+        return 0
+
+    @property
+    def usage_memory_mb(self):
+        """Get the memory usage of the V2Ray process in MB."""
+        return self.memory_usage / (1024 * 1024)
+
+    @property
+    def usage_cpu(self):
+        """Get the CPU usage of the V2Ray process."""
+        if self.v2ray_process and self.v2ray_process.pid:
+            try:
+                process = psutil.Process(self.v2ray_process.pid)
+                return process.cpu_percent(interval=1)
+            except Exception as exc:
+                logging.error(f"Error getting CPU usage: {exc}")
+        return 0
 
     def __del__(self):
         """Ensure resources are cleaned up when the object is garbage collected."""
