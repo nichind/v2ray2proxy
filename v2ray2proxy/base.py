@@ -69,14 +69,14 @@ class V2RayCore:
     """Represents executable of V2Ray core."""
 
     def __init__(self):
-        self.release_tag_url = os.environ.get("V2RAY_RELASE_TAG_URL") or "https://github.com/v2fly/v2ray-core/releases/download/v5.38.0"
+        self.release_tag_url = os.environ.get("V2RAY_RELASE_TAG_URL") or "https://github.com/XTLS/Xray-core/releases/tag/v25.8.3"
         if os.environ.get("V2RAY_EXECUTABLE_DIR"):
             self.executable_dir = os.environ["V2RAY_EXECUTABLE_DIR"]
-            self.executable = os.path.join(self.executable_dir, "v2ray.exe" if os.name == "nt" else "v2ray")
+            self.executable = os.path.join(self.executable_dir, "xray.exe" if os.name == "nt" else "xray")
         if not os.environ.get("V2RAY_EXECUTABLE_DIR") or not os.path.isdir(self.executable_dir):
             logging.info("V2Ray executable directory not found in environment variable, using default...")
             self.executable_dir = self._download_executables()
-            self.executable = os.path.join(self.executable_dir, "v2ray.exe" if os.name == "nt" else "v2ray")
+            self.executable = os.path.join(self.executable_dir, "xray.exe" if os.name == "nt" else "xray")
         if not os.path.isfile(self.executable):
             raise RuntimeError(f"V2Ray executable not found at {self.executable}")
         logging.info(f"V2Ray executable found at {self.executable}")
@@ -98,7 +98,7 @@ class V2RayCore:
         system = platform.system().lower()
         executable_name = "v2ray"
 
-        # Check if the executable and v2ctl already exist
+        # Check if the executable already exist
         v2ray_executable = v2ray_dir / (executable_name + (".exe" if system == "windows" else ""))
 
         if v2ray_executable.exists():
@@ -114,69 +114,77 @@ class V2RayCore:
         # Windows mapping
         if system == "windows":
             if machine == "amd64" or machine == "x86_64":
-                download_file = "v2ray-windows-64.zip"
+                download_file = "Xray-windows-64.zip"
             elif machine == "x86" or machine == "i386":
-                download_file = "v2ray-windows-32.zip"
+                download_file = "Xray-windows-32.zip"
             elif "arm" in machine:
-                download_file = "v2ray-windows-arm32-v7a.zip"
+                download_file = "Xray-windows-arm32-v7a.zip"
 
         # Linux mapping
         elif system == "linux":
             if machine == "x86_64" or machine == "amd64":
-                download_file = "v2ray-linux-64.zip"
+                download_file = "c-linux-64.zip"
             elif machine == "i386" or machine == "x86":
-                download_file = "v2ray-linux-32.zip"
+                download_file = "Xray-linux-32.zip"
             elif "arm" in machine:
                 if "64" in machine or "v8" in machine:
-                    download_file = "v2ray-linux-arm64-v8a.zip"
+                    download_file = "Xray-linux-arm64-v8a.zip"
                 elif "v7" in machine:
-                    download_file = "v2ray-linux-arm32-v7a.zip"
+                    download_file = "Xray-linux-arm32-v7a.zip"
                 elif "v6" in machine:
-                    download_file = "v2ray-linux-arm32-v6.zip"
+                    download_file = "Xray-linux-arm32-v6.zip"
                 else:
-                    download_file = "v2ray-linux-arm32-v5.zip"
+                    download_file = "Xray-linux-arm32-v5.zip"
             elif "mips" in machine:
                 if "64" in machine:
                     if "le" in machine:
-                        download_file = "v2ray-linux-mips64le.zip"
+                        download_file = "Xray-linux-mips64le.zip"
                     else:
-                        download_file = "v2ray-linux-mips64.zip"
+                        download_file = "Xray-linux-mips64.zip"
                 else:
                     if "le" in machine:
-                        download_file = "v2ray-linux-mips32le.zip"
+                        download_file = "Xray-linux-mips32le.zip"
                     else:
-                        download_file = "v2ray-linux-mips32.zip"
+                        download_file = "Xray-linux-mips32.zip"
             elif "ppc64" in machine:
                 if "le" in machine:
-                    download_file = "v2ray-linux-ppc64le.zip"
+                    download_file = "Xray-linux-ppc64le.zip"
                 else:
-                    download_file = "v2ray-linux-ppc64.zip"
+                    download_file = "Xray-linux-ppc64.zip"
             elif "s390x" in machine:
-                download_file = "v2ray-linux-s390x.zip"
+                download_file = "Xray-linux-s390x.zip"
             elif "riscv64" in machine:
-                download_file = "v2ray-linux-riscv64.zip"
+                download_file = "Xray-linux-riscv64.zip"
 
         # macOS mapping
         elif system == "darwin":
-            download_file = "v2ray-macos-64.zip"
+            download_file = "Xray-macos-64.zip"
 
         # FreeBSD mapping
         elif system == "freebsd":
             if machine == "amd64" or machine == "x86_64":
-                download_file = "v2ray-freebsd-64.zip"
+                download_file = "Xray-freebsd-64.zip"
             elif machine == "i386" or machine == "x86":
-                download_file = "v2ray-freebsd-32.zip"
+                download_file = "Xray-freebsd-32.zip"
 
         # OpenBSD mapping
         elif system == "openbsd":
             if machine == "amd64" or machine == "x86_64":
-                download_file = "v2ray-openbsd-64.zip"
+                download_file = "Xray-openbsd-64.zip"
             elif machine == "i386" or machine == "x86":
-                download_file = "v2ray-openbsd-32.zip"
+                download_file = "Xray-openbsd-32.zip"
 
         # Dragonfly mapping
         elif system == "dragonfly":
-            download_file = "v2ray-dragonfly-64.zip"
+            download_file = "Xray-dragonfly-64.zip"
+
+        # Android mapping
+        elif system == "android":
+            if machine == "x86_64" or machine == "amd64":
+                download_file = "Xray-android-amd64.zip"
+            elif "arm" in machine:
+                if "64" in machine or "v8" in machine:
+                    download_file = "Xray-android-arm64-v8a.zip"
 
         if not download_file:
             raise RuntimeError(f"Unsupported platform: {system} {machine}")
@@ -265,7 +273,7 @@ class V2RayProxy:
             logging.warning(f"Failed to get system-assigned port: {str(e)}")
 
         # If that fails, try a few random ports
-        for _ in range(25):
+        for _ in range(100):
             port = random.randint(10000, 65000)
             if port not in exclude_port and not self._is_port_in_use(port):
                 return port
@@ -433,6 +441,67 @@ class V2RayProxy:
             logging.error(f"Failed to parse Trojan link: {str(e)}")
             raise ValueError(f"Invalid Trojan format: {str(e)}")
 
+    def _parse_hysteria2_link(self, link: str):
+        """Parse a Hysteria 2 link into a V2Ray configuration.
+
+        Supported forms:
+          - hy2://<uuid>@host:port/?insecure=1&sni=example.com#fragment
+          - hy2://<method>:<password>@host:port/?type=tcp&...
+        """
+        if not link.startswith("hy2://"):
+            raise ValueError("Not a valid Hysteria 2 link")
+
+        try:
+            parsed = urllib.parse.urlparse(link)
+
+            # username is typically the token/uuid in hy2 links
+            token = parsed.username
+            host = parsed.hostname
+            port = parsed.port
+
+            if not host or not port:
+                raise ValueError("Hysteria link missing host or port")
+
+            params = dict(urllib.parse.parse_qsl(parsed.query or ""))
+
+            # Build tag from fragment (decode percent-encoding). Append " § 0" to match example tag format.
+            fragment = urllib.parse.unquote(parsed.fragment or "")
+            tag = (fragment + " § 0") if fragment else None
+
+            # TLS handling: insecure=1/true -> TLS enabled + insecure true.
+            insecure_val = params.get("insecure", "").lower()
+            insecure_flag = insecure_val in ("1", "true", "yes")
+
+            # If explicit security provided and equals 'none', disable TLS; otherwise enable by default when not insecure?
+            security_param = params.get("security")
+            if security_param == "none":
+                tls_enabled = False
+            else:
+                # Enable TLS by default for hysteria links (unless security=none)
+                tls_enabled = True
+
+            # server_name for TLS comes from sni param or host param
+            server_name = params.get("sni") or params.get("host") or host
+
+            # Build outbound in the requested shape
+            outbound = {
+                "type": "hysteria2",
+                "tag": tag or "",
+                "server": host,
+                "server_port": int(port),
+                "password": token or "",
+                "tls": {
+                    "enabled": bool(tls_enabled),
+                    "server_name": server_name,
+                    "insecure": bool(insecure_flag),
+                },
+            }
+
+            return outbound
+        except Exception as e:
+            logging.error(f"Failed to parse Hysteria 2 link: {str(e)}")
+            raise ValueError(f"Invalid Hysteria 2 format: {str(e)}")
+
     def generate_config(self):
         """Generate V2Ray configuration from link."""
         try:
@@ -445,6 +514,8 @@ class V2RayProxy:
                 outbound = self._parse_shadowsocks_link(self.v2ray_link)
             elif self.v2ray_link.startswith("trojan://"):
                 outbound = self._parse_trojan_link(self.v2ray_link)
+            elif self.v2ray_link.startswith("hy2://"):
+                outbound = self._parse_hysteria2_link(self.v2ray_link)
             else:
                 raise ValueError(f"Unsupported link type: {self.v2ray_link[:10]}...")
 
