@@ -69,7 +69,7 @@ class V2RayCore:
     """Represents executable of V2Ray core."""
 
     def __init__(self):
-        self.release_tag_url = os.environ.get("V2RAY_RELASE_TAG_URL") or "https://github.com/XTLS/Xray-core/releases/tag/v25.8.3"
+        self.release_tag_url = os.environ.get("V2RAY_RELASE_TAG_URL") or "https://github.com/XTLS/Xray-core/releases/download/v25.8.3"
         if os.environ.get("V2RAY_EXECUTABLE_DIR"):
             self.executable_dir = os.environ["V2RAY_EXECUTABLE_DIR"]
             self.executable = os.path.join(self.executable_dir, "xray.exe" if os.name == "nt" else "xray")
@@ -96,7 +96,7 @@ class V2RayCore:
 
         # Determine the executable name based on OS
         system = platform.system().lower()
-        executable_name = "v2ray"
+        executable_name = "xray"
 
         # Check if the executable already exist
         v2ray_executable = v2ray_dir / (executable_name + (".exe" if system == "windows" else ""))
