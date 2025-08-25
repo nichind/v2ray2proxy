@@ -118,12 +118,15 @@ class V2RayCore:
             elif machine == "x86" or machine == "i386":
                 download_file = "Xray-windows-32.zip"
             elif "arm" in machine:
-                download_file = "Xray-windows-arm32-v7a.zip"
+                if "64" in machine or "v8" in machine:
+                    download_file = "Xray-windows-arm64-v8a.zip"
+                else:
+                    download_file = "Xray-windows-arm32-v7a.zip"
 
         # Linux mapping
         elif system == "linux":
             if machine == "x86_64" or machine == "amd64":
-                download_file = "c-linux-64.zip"
+                download_file = "Xray-linux-64.zip"
             elif machine == "i386" or machine == "x86":
                 download_file = "Xray-linux-32.zip"
             elif "arm" in machine:
@@ -155,10 +158,15 @@ class V2RayCore:
                 download_file = "Xray-linux-s390x.zip"
             elif "riscv64" in machine:
                 download_file = "Xray-linux-riscv64.zip"
+            elif "loong64" in machine:
+                download_file = "Xray-linux-loong64.zip"
 
         # macOS mapping
         elif system == "darwin":
-            download_file = "Xray-macos-64.zip"
+            if "arm" in machine or "aarch64" in machine:
+                download_file = "Xray-macos-arm64-v8a.zip"
+            else:
+                download_file = "Xray-macos-64.zip"
 
         # FreeBSD mapping
         elif system == "freebsd":
@@ -166,6 +174,11 @@ class V2RayCore:
                 download_file = "Xray-freebsd-64.zip"
             elif machine == "i386" or machine == "x86":
                 download_file = "Xray-freebsd-32.zip"
+            elif "arm" in machine:
+                if "64" in machine or "v8" in machine:
+                    download_file = "Xray-freebsd-arm64-v8a.zip"
+                elif "v7" in machine:
+                    download_file = "Xray-freebsd-arm32-v7a.zip"
 
         # OpenBSD mapping
         elif system == "openbsd":
@@ -173,6 +186,11 @@ class V2RayCore:
                 download_file = "Xray-openbsd-64.zip"
             elif machine == "i386" or machine == "x86":
                 download_file = "Xray-openbsd-32.zip"
+            elif "arm" in machine:
+                if "64" in machine or "v8" in machine:
+                    download_file = "Xray-openbsd-arm64-v8a.zip"
+                elif "v7" in machine:
+                    download_file = "Xray-openbsd-arm32-v7a.zip"
 
         # Dragonfly mapping
         elif system == "dragonfly":
