@@ -8,8 +8,21 @@ on:
 
 jobs:
   test:
-    name: Build and Install Package, Run Tests
-    runs-on: ubuntu-latest
+    name: Build and Install Package, Run Tests - ${{ matrix.os }}
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu
+            runs-on: ubuntu-latest
+          - os: windows
+            runs-on: windows-latest
+          - os: freebsd
+            runs-on:
+              - self-hosted
+              - freebsd
+    env:
+      TEST_V2RAY_LINK: ${{ secrets.TEST_V2RAY_LINK }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -23,10 +36,9 @@ jobs:
           python -m pip install setuptools wheel pytest pytest-asyncio
           python -m pip install -r requirements.txt
           python -m pip install -r requirements-dev.txt
-          python -m pip install -e .
-      - name: Set V2Ray link
+      - name: Build the Package
         run: |
-          echo "TEST_V2RAY_LINK=${{ secrets.TEST_V2RAY_LINK }}" >> $GITHUB_ENV
+          python -m pip install -e .
       - name: Run Tests
         run: |
           python -m pytest tests/ --tb=short --disable-warnings
