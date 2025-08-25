@@ -459,67 +459,6 @@ class V2RayProxy:
             logging.error(f"Failed to parse Trojan link: {str(e)}")
             raise ValueError(f"Invalid Trojan format: {str(e)}")
 
-    def _parse_hysteria2_link(self, link: str):
-        """Parse a Hysteria 2 link into a V2Ray configuration.
-
-        Supported forms:
-          - hy2://<uuid>@host:port/?insecure=1&sni=example.com#fragment
-          - hy2://<method>:<password>@host:port/?type=tcp&...
-        """
-        if not link.startswith("hy2://"):
-            raise ValueError("Not a valid Hysteria 2 link")
-
-        try:
-            parsed = urllib.parse.urlparse(link)
-
-            # username is typically the token/uuid in hy2 links
-            token = parsed.username
-            host = parsed.hostname
-            port = parsed.port
-
-            if not host or not port:
-                raise ValueError("Hysteria link missing host or port")
-
-            params = dict(urllib.parse.parse_qsl(parsed.query or ""))
-
-            # Build tag from fragment (decode percent-encoding). Append " § 0" to match example tag format.
-            fragment = urllib.parse.unquote(parsed.fragment or "")
-            tag = (fragment + " § 0") if fragment else None
-
-            # TLS handling: insecure=1/true -> TLS enabled + insecure true.
-            insecure_val = params.get("insecure", "").lower()
-            insecure_flag = insecure_val in ("1", "true", "yes")
-
-            # If explicit security provided and equals 'none', disable TLS; otherwise enable by default when not insecure?
-            security_param = params.get("security")
-            if security_param == "none":
-                tls_enabled = False
-            else:
-                # Enable TLS by default for hysteria links (unless security=none)
-                tls_enabled = True
-
-            # server_name for TLS comes from sni param or host param
-            server_name = params.get("sni") or params.get("host") or host
-
-            # Build outbound in the requested shape
-            outbound = {
-                "type": "hysteria2",
-                "tag": tag or "",
-                "server": host,
-                "server_port": int(port),
-                "password": token or "",
-                "tls": {
-                    "enabled": bool(tls_enabled),
-                    "server_name": server_name,
-                    "insecure": bool(insecure_flag),
-                },
-            }
-
-            return outbound
-        except Exception as e:
-            logging.error(f"Failed to parse Hysteria 2 link: {str(e)}")
-            raise ValueError(f"Invalid Hysteria 2 format: {str(e)}")
-
     def generate_config(self):
         """Generate V2Ray configuration from link."""
         try:
