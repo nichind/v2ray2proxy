@@ -471,8 +471,6 @@ class V2RayProxy:
                 outbound = self._parse_shadowsocks_link(self.v2ray_link)
             elif self.v2ray_link.startswith("trojan://"):
                 outbound = self._parse_trojan_link(self.v2ray_link)
-            elif self.v2ray_link.startswith("hy2://"):
-                outbound = self._parse_hysteria2_link(self.v2ray_link)
             else:
                 raise ValueError(f"Unsupported link type: {self.v2ray_link[:10]}...")
 
