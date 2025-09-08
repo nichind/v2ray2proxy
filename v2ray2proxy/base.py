@@ -306,6 +306,8 @@ class V2RayProxy:
         try:
             # Remove "vmess://" and decode the base64 content
             b64_content = link[8:]
+            # Add padding if necessary
+            b64_content += "=" * (-len(b64_content) % 4)
             decoded_content = base64.b64decode(b64_content).decode("utf-8")
             vmess_info = json.loads(decoded_content)
 
@@ -357,11 +359,14 @@ class V2RayProxy:
             parsed_url = urllib.parse.urlparse(link)
 
             # Extract user info (uuid)
-            user_info = parsed_url.netloc.split("@")[0]
+            if "@" not in parsed_url.netloc:
+                raise ValueError("Invalid VLESS link: missing user info")
+            user_info, host_port = parsed_url.netloc.split("@", 1)
 
             # Extract host and port
-            host_port = parsed_url.netloc.split("@")[1]
-            host, port = host_port.split(":")
+            if ":" not in host_port:
+                raise ValueError("Invalid VLESS link: missing port")
+            host, port = host_port.rsplit(":", 1)
 
             # Parse query parameters
             params = dict(urllib.parse.parse_qsl(parsed_url.query))
@@ -370,18 +375,18 @@ class V2RayProxy:
             outbound = {
                 "protocol": "vless",
                 "settings": {
-                    "vnext": [{"address": host, "port": int(port), "users": [{"id": user_info, "encryption": "none", "level": 0}]}]
+                    "vnext": [{"address": host, "port": int(port), "users": [{"id": user_info, "encryption": params.get("encryption", "none"), "level": 0}]}]
                 },
                 "streamSettings": {"network": params.get("type", "tcp"), "security": params.get("security", "none")},
             }
 
             # Handle TLS settings
             if params.get("security") == "tls":
-                outbound["streamSettings"]["tlsSettings"] = {"serverName": params.get("sni", "")}
+                outbound["streamSettings"]["tlsSettings"] = {"serverName": params.get("sni", host)}
 
             # Handle WebSocket settings
             if params.get("type") == "ws":
-                outbound["streamSettings"]["wsSettings"] = {"path": params.get("path", "/"), "headers": {"Host": params.get("host", "")}}
+                outbound["streamSettings"]["wsSettings"] = {"path": params.get("path", "/"), "headers": {"Host": params.get("host", host)}}
 
             return outbound
         except Exception as e:
@@ -394,29 +399,34 @@ class V2RayProxy:
             raise ValueError("Not a valid Shadowsocks link")
 
         try:
-            # Two possible formats:
-            # 1. ss://base64(method:password@host:port)#remark
-            # 2. ss://base64(method:password)@host:port#remark
-
             parsed_url = urllib.parse.urlparse(link)
+            remark = urllib.parse.unquote(parsed_url.fragment) if parsed_url.fragment else ""
 
             if "@" in parsed_url.netloc:
-                # Format 2
+                # Format: ss://base64(method:password)@host:port#remark
                 user_info_b64, host_port = parsed_url.netloc.split("@", 1)
+                user_info_b64 += "=" * (-len(user_info_b64) % 4)
                 user_info = base64.b64decode(user_info_b64).decode("utf-8")
                 method, password = user_info.split(":", 1)
-                host, port = host_port.split(":", 1)
+                host, port = host_port.rsplit(":", 1)
             else:
-                # Format 1
-                decoded = base64.b64decode(parsed_url.netloc).decode("utf-8")
+                # Format: ss://base64(method:password@host:port)#remark
+                decoded_part = parsed_url.netloc
+                decoded_part += "=" * (-len(decoded_part) % 4)
+                decoded = base64.b64decode(decoded_part).decode("utf-8")
+                
+                if "@" not in decoded:
+                    raise ValueError("Invalid Shadowsocks link format")
+                
                 method_pass, host_port = decoded.split("@", 1)
                 method, password = method_pass.split(":", 1)
-                host, port = host_port.split(":", 1)
+                host, port = host_port.rsplit(":", 1)
 
             # Create outbound configuration
             outbound = {
                 "protocol": "shadowsocks",
                 "settings": {"servers": [{"address": host, "port": int(port), "method": method, "password": password}]},
+                "tag": remark
             }
 
             return outbound
@@ -433,12 +443,17 @@ class V2RayProxy:
             # Format: trojan://password@host:port?param=value&param2=value2#remark
             parsed_url = urllib.parse.urlparse(link)
 
+            if "@" not in parsed_url.netloc:
+                raise ValueError("Invalid Trojan link: missing password or host")
+
             # Extract password
-            password = parsed_url.netloc.split("@")[0]
+            password, host_port = parsed_url.netloc.split("@", 1)
+            password = urllib.parse.unquote(password)
 
             # Extract host and port
-            host_port = parsed_url.netloc.split("@")[1]
-            host, port = host_port.split(":")
+            if ":" not in host_port:
+                raise ValueError("Invalid Trojan link: missing port")
+            host, port = host_port.rsplit(":", 1)
 
             # Parse query parameters
             params = dict(urllib.parse.parse_qsl(parsed_url.query))
@@ -449,19 +464,29 @@ class V2RayProxy:
                 "settings": {"servers": [{"address": host, "port": int(port), "password": password}]},
                 "streamSettings": {
                     "network": params.get("type", "tcp"),
-                    "security": "tls",
+                    "security": params.get("security", "tls"), # Default to tls for trojan
                     "tlsSettings": {"serverName": params.get("sni", host)},
                 },
             }
+            
+            if params.get("type") == "ws":
+                outbound["streamSettings"]["wsSettings"] = {
+                    "path": params.get("path", "/"),
+                    "headers": {"Host": params.get("host", host)}
+                }
 
             return outbound
         except Exception as e:
             logging.error(f"Failed to parse Trojan link: {str(e)}")
             raise ValueError(f"Invalid Trojan format: {str(e)}")
 
+    def _prepare_link(self):
+        ...
+
     def generate_config(self):
         """Generate V2Ray configuration from link."""
         try:
+            # self.v2ray_link._prepare_link()
             # Determine the type of link and parse accordingly
             if self.v2ray_link.startswith("vmess://"):
                 outbound = self._parse_vmess_link(self.v2ray_link)
@@ -539,7 +564,7 @@ class V2RayProxy:
                 last_error = str(e)
                 logging.debug(f"Proxy not ready yet: {last_error}")
 
-            time.sleep(1)
+            time.sleep(0.01)
 
         # If we get here, the proxy didn't become ready in time
         if self.v2ray_process.poll() is not None:
@@ -776,7 +801,7 @@ class V2RayProxy:
             # Fallback to subprocess if psutil not available
             try:
                 subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], check=False, capture_output=True, timeout=timeout)
-                time.sleep(0.1)
+                time.sleep(0.01)
                 if self.v2ray_process.poll() is not None:
                     self._process_terminated.set()
                     return True
@@ -929,7 +954,7 @@ class V2RayProxy:
     @property
     def usage_memory_mb(self):
         """Get the memory usage of the V2Ray process in MB."""
-        return self.memory_usage / (1024 * 1024)
+        return self.usage_memory / (1024 * 1024)
 
     @property
     def usage_cpu(self):
@@ -1144,8 +1169,7 @@ class V2RayPool:
             # Stop the proxy
             self.proxies[proxy_id].stop()
 
-            # Wait a bit to ensure clean shutdown
-            time.sleep(1)
+            time.sleep(0.02)
 
             # Start the proxy again
             self.proxies[proxy_id].start()
