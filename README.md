@@ -1,3 +1,6 @@
+> Check out [nichind/singbox2proxy](https://github.com/nichind/singbox2proxy), a similar library with better performance and more features, supporting SingBox links (hy2://, tuic://, etc.) in addition to V2Ray links, chaining support & built-in http client.
+
+
 # v2ray2proxy
 
 A Python library to convert V2Ray configuration links (vmess://, vless://, ss://, trojan://) to usable HTTP and SOCKS5 proxies for Python HTTP clients.
@@ -138,11 +141,6 @@ python -m v2ray2proxy "vmess://..." --pool --pool-size 3
 - **Shadowsocks**: `ss://...` - Shadowsocks protocol
 - **Trojan**: `trojan://...` - Trojan protocol
 
-## Requirements
-
-- Python 3.9+
-- No external V2Ray installation needed (automatically downloaded)
-
 ## Advanced Usage
 
 ### Custom Ports
@@ -191,10 +189,6 @@ print(json.dumps(config, indent=2))
 config_path = proxy.create_config_file()
 print(f"Config file created at: {config_path}")
 ```
-
-## Some thoughts
-
-Each v2ray instance eats about ~17MB of RAM on Linux, under 10MB on W11
 
 ## License
 
